@@ -230,18 +230,37 @@ describe("github-checks", () => {
         { ...mockIssues[0], component: "unknown:component" },
       ];
 
-      const annotations = createAnnotations(issuesWithUnknownComponent, mockComponents);
+      const annotations = createAnnotations(
+        issuesWithUnknownComponent,
+        mockComponents,
+      );
       expect(annotations).toHaveLength(0);
     });
 
-    it("limits annotations to 50", () => {
-      const manyIssues: SonarQubeIssue[] = Array.from({ length: 60 }, (_, i) => ({
-        ...mockIssues[0],
-        key: `issue-${i}`,
-      }));
+    it("limits annotations to 50 and warns", () => {
+      const manyIssues: SonarQubeIssue[] = Array.from(
+        { length: 60 },
+        (_, i) => ({
+          ...mockIssues[0],
+          key: `issue-${i}`,
+        }),
+      );
 
       const annotations = createAnnotations(manyIssues, mockComponents);
       expect(annotations).toHaveLength(50);
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("Found 60 issues"),
+      );
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining("50"));
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("SARIF output file"),
+      );
+    });
+
+    it("does not warn when annotations are within the limit", () => {
+      const annotations = createAnnotations(mockIssues, mockComponents);
+      expect(annotations.length).toBeLessThanOrEqual(50);
+      expect(core.warning).not.toHaveBeenCalled();
     });
   });
 
@@ -260,7 +279,9 @@ describe("github-checks", () => {
       expect(summary).toContain("pr%3A42");
       expect(summary).toContain("tool%3ASonarQube");
       expect(summary).toContain("📊 [View in SonarQube]");
-      expect(summary).toContain("https://sonar.example.com/dashboard?id=my-project");
+      expect(summary).toContain(
+        "https://sonar.example.com/dashboard?id=my-project",
+      );
     });
 
     it("formats summary when no issues", () => {
@@ -268,7 +289,12 @@ describe("github-checks", () => {
         ...mockStats,
         totalIssues: 0,
         bySeverity: { BLOCKER: 0, CRITICAL: 0, MAJOR: 0, MINOR: 0, INFO: 0 },
-        byType: { BUG: 0, VULNERABILITY: 0, CODE_SMELL: 0, SECURITY_HOTSPOT: 0 },
+        byType: {
+          BUG: 0,
+          VULNERABILITY: 0,
+          CODE_SMELL: 0,
+          SECURITY_HOTSPOT: 0,
+        },
       };
 
       const summary = formatCheckSummary(emptyStats, mockConfig);
@@ -279,11 +305,34 @@ describe("github-checks", () => {
 
     it("includes filtered message when issues were filtered", () => {
       const statsWithFiltered = { ...mockStats, filtered: 10 };
-      const configWithMinSeverity = { ...mockConfig, minSeverity: "MAJOR" as const };
+      const configWithMinSeverity = {
+        ...mockConfig,
+        minSeverity: "MAJOR" as const,
+      };
 
-      const summary = formatCheckSummary(statsWithFiltered, configWithMinSeverity);
+      const summary = formatCheckSummary(
+        statsWithFiltered,
+        configWithMinSeverity,
+      );
 
       expect(summary).toContain("10 issues were filtered out");
+    });
+
+    it("includes truncation notice when issues exceed annotation limit", () => {
+      const largeStats = { ...mockStats, totalIssues: 75 };
+
+      const summary = formatCheckSummary(largeStats, mockConfig);
+
+      expect(summary).toContain("⚠️ Showing top 50 issues as annotations");
+      expect(summary).toContain("All 75 issues are in the SARIF output file");
+    });
+
+    it("does not include truncation notice when issues are within annotation limit", () => {
+      const smallStats = { ...mockStats, totalIssues: 5 };
+
+      const summary = formatCheckSummary(smallStats, mockConfig);
+
+      expect(summary).not.toContain("Showing top 50 issues");
     });
   });
 

@@ -137,6 +137,14 @@ export function createAnnotations(
     });
   }
 
+  if (sortedIssues.length > MAX_ANNOTATIONS) {
+    core.warning(
+      `Found ${sortedIssues.length} issues but GitHub limits check run annotations to ${MAX_ANNOTATIONS}. ` +
+        `Showing the ${MAX_ANNOTATIONS} most severe issues as annotations. ` +
+        `All ${sortedIssues.length} issues are included in the SARIF output file.`,
+    );
+  }
+
   return annotations;
 }
 
@@ -173,6 +181,14 @@ export function formatCheckSummary(
       lines.push("");
       lines.push(
         `> ℹ️ ${stats.filtered} issues were filtered out (below ${config.minSeverity} severity threshold)`,
+      );
+    }
+
+    if (stats.totalIssues > MAX_ANNOTATIONS) {
+      lines.push("");
+      lines.push(
+        `> ⚠️ Showing top ${MAX_ANNOTATIONS} issues as annotations (GitHub limit). ` +
+          `All ${stats.totalIssues} issues are in the SARIF output file.`,
       );
     }
 
