@@ -167,6 +167,7 @@ export class SonarQubeClient {
 
     let page = 1;
     let total = 0;
+    let totalKnown = false;
 
     core.info(`Fetching issues for project: ${this.projectKey}`);
 
@@ -190,17 +191,33 @@ export class SonarQubeClient {
         const normalized = normalizeIssuesResponse(response.data);
 
         if (page === 1) {
-          total = normalized.pagingTotal ?? normalized.issues.length;
-          core.info(`Total issues to fetch: ${total}`);
+          if (normalized.pagingTotal !== undefined) {
+            total = normalized.pagingTotal;
+            totalKnown = true;
+            core.info(`Total issues to fetch: ${total}`);
+          } else {
+            core.warning(
+              "SonarQube response is missing paging.total. " +
+                "Falling back to last-page heuristic (fetching until a page has fewer than " +
+                `${MAX_PAGE_SIZE} results).`,
+            );
+          }
         }
 
         allIssues.push(...normalized.issues);
         this.mergeIntoMap(componentMap, normalized.components, "key");
         this.mergeIntoMap(ruleMap, normalized.rules, "key");
 
-        core.info(`Progress: ${allIssues.length}/${total} issues`);
+        if (totalKnown) {
+          core.info(`Progress: ${allIssues.length}/${total} issues`);
+          if (allIssues.length >= total) break;
+        } else {
+          core.info(
+            `Progress: ${allIssues.length} issues fetched (total unknown)`,
+          );
+          if (normalized.issues.length < MAX_PAGE_SIZE) break;
+        }
 
-        if (allIssues.length >= total) break;
         page++;
       } catch (error) {
         throw this.handleError(error, "fetching issues");

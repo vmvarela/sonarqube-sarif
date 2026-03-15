@@ -20,7 +20,8 @@ vi.mock("axios", () => ({
       axiosMocks.create(...args);
       return { get: axiosMocks.get };
     },
-    isAxiosError: (error: unknown) => (error as { isAxiosError?: boolean })?.isAxiosError === true,
+    isAxiosError: (error: unknown) =>
+      (error as { isAxiosError?: boolean })?.isAxiosError === true,
   },
 }));
 
@@ -84,15 +85,36 @@ describe("SonarQubeClient", () => {
         data: {
           paging: { total: 3 },
           issues: [
-            { key: "issue-1", rule: "ts:S1234", severity: "MAJOR", component: "project:src/a.ts", project: "project", message: "Issue 1", status: "OPEN", type: "BUG" },
-            { key: "issue-2", rule: "ts:S1234", severity: "MINOR", component: "project:src/b.ts", project: "project", message: "Issue 2", status: "OPEN", type: "CODE_SMELL" },
+            {
+              key: "issue-1",
+              rule: "ts:S1234",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
+            {
+              key: "issue-2",
+              rule: "ts:S1234",
+              severity: "MINOR",
+              component: "project:src/b.ts",
+              project: "project",
+              message: "Issue 2",
+              status: "OPEN",
+              type: "CODE_SMELL",
+            },
           ],
           components: [
-            { key: "project:src/a.ts", name: "a.ts", path: "src/a.ts", qualifier: "FIL" },
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
           ],
-          rules: [
-            { key: "ts:S1234", name: "Rule 1234", status: "READY" },
-          ],
+          rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
         },
       });
 
@@ -101,14 +123,26 @@ describe("SonarQubeClient", () => {
         data: {
           paging: { total: 3 },
           issues: [
-            { key: "issue-3", rule: "ts:S5678", severity: "CRITICAL", component: "project:src/c.ts", project: "project", message: "Issue 3", status: "OPEN", type: "VULNERABILITY" },
+            {
+              key: "issue-3",
+              rule: "ts:S5678",
+              severity: "CRITICAL",
+              component: "project:src/c.ts",
+              project: "project",
+              message: "Issue 3",
+              status: "OPEN",
+              type: "VULNERABILITY",
+            },
           ],
           components: [
-            { key: "project:src/c.ts", name: "c.ts", path: "src/c.ts", qualifier: "FIL" },
+            {
+              key: "project:src/c.ts",
+              name: "c.ts",
+              path: "src/c.ts",
+              qualifier: "FIL",
+            },
           ],
-          rules: [
-            { key: "ts:S5678", name: "Rule 5678", status: "READY" },
-          ],
+          rules: [{ key: "ts:S5678", name: "Rule 5678", status: "READY" }],
         },
       });
 
@@ -126,14 +160,26 @@ describe("SonarQubeClient", () => {
         data: {
           paging: { total: 1 },
           issues: [
-            { key: "issue-1", rule: "ts:S1234", severity: "MAJOR", component: "project:src/a.ts", project: "project", message: "Issue 1", status: "OPEN", type: "BUG" },
+            {
+              key: "issue-1",
+              rule: "ts:S1234",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
           ],
           components: [
-            { key: "project:src/a.ts", name: "a.ts", path: "src/a.ts", qualifier: "FIL" },
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
           ],
-          rules: [
-            { key: "ts:S1234", name: "Rule 1234", status: "READY" },
-          ],
+          rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
         },
       });
 
@@ -167,14 +213,26 @@ describe("SonarQubeClient", () => {
         data: {
           paging: { total: 2 },
           issues: [
-            { key: "issue-1", rule: "ts:S1234", severity: "MAJOR", component: "project:src/a.ts", project: "project", message: "Issue 1", status: "OPEN", type: "BUG" },
+            {
+              key: "issue-1",
+              rule: "ts:S1234",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
           ],
           components: [
-            { key: "project:src/a.ts", name: "a.ts", path: "src/a.ts", qualifier: "FIL" },
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
           ],
-          rules: [
-            { key: "ts:S1234", name: "Rule 1234", status: "READY" },
-          ],
+          rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
         },
       });
 
@@ -183,14 +241,26 @@ describe("SonarQubeClient", () => {
         data: {
           paging: { total: 2 },
           issues: [
-            { key: "issue-2", rule: "ts:S1234", severity: "MINOR", component: "project:src/a.ts", project: "project", message: "Issue 2", status: "OPEN", type: "CODE_SMELL" },
+            {
+              key: "issue-2",
+              rule: "ts:S1234",
+              severity: "MINOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 2",
+              status: "OPEN",
+              type: "CODE_SMELL",
+            },
           ],
           components: [
-            { key: "project:src/a.ts", name: "a.ts", path: "src/a.ts", qualifier: "FIL" },
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
           ],
-          rules: [
-            { key: "ts:S1234", name: "Rule 1234", status: "READY" },
-          ],
+          rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
         },
       });
 
@@ -208,10 +278,24 @@ describe("SonarQubeClient", () => {
         data: {
           paging: { total: 1 },
           issues: [
-            { key: "issue-1", rule: "ts:S9999", severity: "MAJOR", component: "project:src/a.ts", project: "project", message: "Issue 1", status: "OPEN", type: "BUG" },
+            {
+              key: "issue-1",
+              rule: "ts:S9999",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
           ],
           components: [
-            { key: "project:src/a.ts", name: "a.ts", path: "src/a.ts", qualifier: "FIL" },
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
           ],
           rules: [], // Missing rule!
         },
@@ -323,6 +407,123 @@ describe("SonarQubeClient", () => {
 
       await expect(client.fetchAllIssues()).rejects.toThrow(SonarQubeError);
     });
+
+    it("fetches all pages when paging.total is missing (last-page heuristic)", async () => {
+      // Helper: build a page with N issues and no paging.total
+      const makePage = (count: number, startIndex: number) => ({
+        data: {
+          // No paging.total — simulates an API that omits it
+          paging: {},
+          issues: Array.from({ length: count }, (_, i) => ({
+            key: `issue-${startIndex + i}`,
+            rule: "ts:S1234",
+            severity: "MAJOR",
+            component: "project:src/a.ts",
+            project: "project",
+            message: `Issue ${startIndex + i}`,
+            status: "OPEN",
+            type: "BUG",
+          })),
+          components: [
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
+          ],
+          rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
+        },
+      });
+
+      // Page 1: full page (500 issues) — must continue
+      axiosMocks.get.mockResolvedValueOnce(makePage(500, 0));
+      // Page 2: full page (500 issues) — must continue
+      axiosMocks.get.mockResolvedValueOnce(makePage(500, 500));
+      // Page 3: partial page (37 issues) — signals last page
+      axiosMocks.get.mockResolvedValueOnce(makePage(37, 1000));
+
+      const client = new SonarQubeClient(mockConfig);
+      const result = await client.fetchAllIssues();
+
+      expect(axiosMocks.get).toHaveBeenCalledTimes(3);
+      expect(result.issues).toHaveLength(1037);
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("missing paging.total"),
+      );
+    });
+
+    it("stops after one page when paging.total is missing and page is partial", async () => {
+      // A single partial page — no paging.total — should stop immediately
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          paging: {},
+          issues: Array.from({ length: 42 }, (_, i) => ({
+            key: `issue-${i}`,
+            rule: "ts:S1234",
+            severity: "MAJOR",
+            component: "project:src/a.ts",
+            project: "project",
+            message: `Issue ${i}`,
+            status: "OPEN",
+            type: "BUG",
+          })),
+          components: [
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
+          ],
+          rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
+        },
+      });
+
+      const client = new SonarQubeClient(mockConfig);
+      const result = await client.fetchAllIssues();
+
+      expect(axiosMocks.get).toHaveBeenCalledTimes(1);
+      expect(result.issues).toHaveLength(42);
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("missing paging.total"),
+      );
+    });
+
+    it("fetches exactly MAX_PAGE_SIZE issues in one page without spurious extra fetch", async () => {
+      // paging.total present and equals page size — should stop after page 1
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          paging: { total: 500 },
+          issues: Array.from({ length: 500 }, (_, i) => ({
+            key: `issue-${i}`,
+            rule: "ts:S1234",
+            severity: "MAJOR",
+            component: "project:src/a.ts",
+            project: "project",
+            message: `Issue ${i}`,
+            status: "OPEN",
+            type: "BUG",
+          })),
+          components: [
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
+          ],
+          rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
+        },
+      });
+
+      const client = new SonarQubeClient(mockConfig);
+      const result = await client.fetchAllIssues();
+
+      expect(axiosMocks.get).toHaveBeenCalledTimes(1);
+      expect(result.issues).toHaveLength(500);
+      expect(core.warning).not.toHaveBeenCalled();
+    });
   });
 
   describe("waitForProcessing", () => {
@@ -358,7 +559,9 @@ describe("SonarQubeClient", () => {
       await vi.advanceTimersByTimeAsync(10000);
       await promise;
 
-      expect(core.info).toHaveBeenCalledWith("✓ Analysis completed successfully");
+      expect(core.info).toHaveBeenCalledWith(
+        "✓ Analysis completed successfully",
+      );
     });
 
     it("warns and continues when analysis fails", async () => {
@@ -399,7 +602,11 @@ describe("SonarQubeClient", () => {
         data: { current: { status: "PENDING" } },
       });
 
-      const shortTimeoutConfig = { ...mockConfig, maxWaitTime: 30, pollingInterval: 10 };
+      const shortTimeoutConfig = {
+        ...mockConfig,
+        maxWaitTime: 30,
+        pollingInterval: 10,
+      };
       const client = new SonarQubeClient(shortTimeoutConfig);
       const promise = client.waitForProcessing();
 
