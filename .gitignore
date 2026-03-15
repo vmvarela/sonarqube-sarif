@@ -16,8 +16,7 @@ coverage/
 .secrets
 scripts/
 
-# Keep only dist/index.js (the bundled action)
-dist/*.d.ts
-dist/*.d.ts.map
-dist/*.js.map
+# Keep only dist/index.js (the bundled action entry point).
+# tsc emits individual .js files into dist/ but only the esbuild bundle matters.
+dist/*
 !dist/index.js
