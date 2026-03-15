@@ -27,11 +27,6 @@ jobs:
           SONAR_SEARCH_JAVAADDITIONALOPTS: "-Dnode.store.allow_mmap=false"
         options: >-
           --ulimit nofile=131072:131072
-          --health-cmd "curl -f http://localhost:9000/api/system/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 12
-          --health-start-period 90s
 
     steps:
       - name: Checkout repository
@@ -54,6 +49,28 @@ jobs:
       # SonarQube 10+ forces a password change before the API accepts requests.
       # We change it here and generate a short-lived analysis token on the fly,
       # so no repository secrets are needed for this workflow.
+      #
+      # Note: no Docker health check is used on the service container because
+      # `curl` is not available inside the sonarqube:community image. Instead
+      # we poll the health endpoint from the runner (host) until SonarQube is
+      # fully operational (status=GREEN) before proceeding.
+      - name: Wait for SonarQube to be ready
+        run: |
+          echo "Waiting for SonarQube to become operational..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -sf -u admin:admin \
+              "http://localhost:9000/api/system/health" 2>/dev/null \
+              | grep -o '"health":"[^"]*"' | cut -d'"' -f4 || true)
+            echo "Attempt ${i}/30 — status: ${STATUS:-unavailable}"
+            if [ "${STATUS}" = "GREEN" ]; then
+              echo "SonarQube is ready."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "SonarQube did not become ready in time."
+          exit 1
+
       - name: Setup SonarQube (change default password and create token)
         id: sonar_setup
         env:
