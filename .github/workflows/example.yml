@@ -90,11 +90,11 @@ jobs:
             exit 1
           fi
 
-          # Generate a global analysis token for this run
+          # Generate a user token for this run (USER_TOKEN has read access to issues API)
           TOKEN=$(curl -sf -X POST \
             -H "Authorization: Basic $(printf 'admin:%s' "${SONAR_ADMIN_PASSWORD}" | base64 -w0)" \
             "http://localhost:9000/api/user_tokens/generate" \
-            -d "name=ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}&type=GLOBAL_ANALYSIS_TOKEN" \
+            -d "name=ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}&type=USER_TOKEN" \
             | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 
           # Mask the token so it never appears in logs
