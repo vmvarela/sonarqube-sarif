@@ -485,6 +485,9 @@ describe("SonarQubeClient", () => {
 
       expect(axiosMocks.get).toHaveBeenCalledTimes(1);
       expect(result.issues).toHaveLength(42);
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("missing paging.total"),
+      );
     });
 
     it("fetches exactly MAX_PAGE_SIZE issues in one page without spurious extra fetch", async () => {
