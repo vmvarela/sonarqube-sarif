@@ -1,5 +1,5 @@
 name: "SonarQube to GitHub Security Tab (SARIF)"
-description: "Export SonarQube issues to GitHub Security Tab via SARIF. Works with Community, Developer, Enterprise, and Data Center editions. Adds PR annotations and code scanning."
+description: "Export SonarQube issues to GitHub Security Tab via SARIF. Adds PR annotations and code scanning."
 author: "vmvarela"
 
 branding:
