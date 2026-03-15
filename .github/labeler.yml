@@ -1,0 +1,29 @@
+"type:docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+          - "LICENSE*"
+          - "SECURITY.md"
+
+"type:chore":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - ".husky/**"
+          - "action.yml"
+          - "eslint.config.*"
+          - "package.json"
+          - "package-lock.json"
+          - "skills-lock.json"
+          - "sonar-project.properties"
+          - "tsconfig*.json"
+          - "vitest.config.*"
+          - "dist/**"
+          - "lib/**"
+          - "tests/**"
+
+"type:feature":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/**"

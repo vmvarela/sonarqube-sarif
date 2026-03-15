@@ -1,0 +1,23 @@
+# Agent tooling (not part of the project)
+AGENTS.md
+skills-lock.json
+.agents/
+
+node_modules/
+lib/
+*.log
+.DS_Store
+.env
+.idea/
+.vscode/
+*.sarif
+coverage/
+.act
+.secrets
+scripts/
+
+# Keep only dist/index.js (the bundled action)
+dist/*.d.ts
+dist/*.d.ts.map
+dist/*.js.map
+!dist/index.js

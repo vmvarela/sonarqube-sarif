@@ -1,0 +1,59 @@
+{
+  "name": "sonarqube-sarif",
+  "version": "0.1.0",
+  "description": "GitHub Action to convert SonarQube Community Edition issues to SARIF format",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && esbuild src/main.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --minify",
+    "build:watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write 'src/**/*.ts'",
+    "clean": "rm -rf dist lib",
+    "prepublishOnly": "npm run build",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "sonarqube",
+    "sarif",
+    "github-action",
+    "code-scanning",
+    "security",
+    "static-analysis",
+    "code-quality"
+  ],
+  "author": "vmvarela",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vmvarela/sonarqube-sarif.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vmvarela/sonarqube-sarif/issues"
+  },
+  "homepage": "https://github.com/vmvarela/sonarqube-sarif#readme",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.0",
+    "@actions/github": "^9.0.0",
+    "axios": "^1.13.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.2.2",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "esbuild": "^0.27.3",
+    "eslint": "^10.0.2",
+    "husky": "^9.1.7",
+    "prettier": "^3.8.1",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
+  }
+}

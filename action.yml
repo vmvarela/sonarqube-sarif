@@ -1,0 +1,93 @@
+name: 'SonarQube Community to GitHub Security Tab (SARIF)'
+description: 'Export SonarQube CE issues to GitHub Security Tab via SARIF. Adds PR annotations and code scanning.'
+author: 'vmvarela'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  sonar-host-url:
+    description: 'SonarQube server URL (e.g., https://sonarqube.example.com)'
+    required: true
+  sonar-token:
+    description: 'SonarQube authentication token with Browse permission'
+    required: true
+  project-key:
+    description: 'SonarQube project key (defaults to repository name when omitted)'
+    required: false
+  output-file:
+    description: 'Output SARIF file path'
+    required: false
+    default: 'sonarqube.sarif'
+  branch:
+    description: 'Branch to analyze (optional, defaults to main branch)'
+    required: false
+  wait-for-processing:
+    description: 'Wait for SonarQube analysis to complete before fetching issues'
+    required: false
+    default: 'true'
+  max-wait-time:
+    description: 'Maximum time to wait for analysis completion (seconds)'
+    required: false
+    default: '300'
+  polling-interval:
+    description: 'Interval between status checks when waiting (seconds)'
+    required: false
+    default: '10'
+  processing-delay:
+    description: 'Fixed delay in seconds before fetching issues (0-600). Alternative to wait-for-processing when lacking Execute Analysis permission'
+    required: false
+    default: '0'
+  min-severity:
+    description: 'Minimum severity to include (INFO, MINOR, MAJOR, CRITICAL, BLOCKER)'
+    required: false
+    default: 'INFO'
+  include-resolved:
+    description: 'Include resolved issues in output'
+    required: false
+    default: 'false'
+  pr-comment:
+    description: 'Post a summary comment on pull requests when issues are found'
+    required: false
+    default: 'true'
+  fail-on-severity:
+    description: 'Fail the check if issues at or above this severity exist (INFO, MINOR, MAJOR, CRITICAL, BLOCKER). Omit to never fail.'
+    required: false
+  github-token:
+    description: 'GitHub token for PR comments and check runs (defaults to github.token)'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  sarif-file:
+    description: 'Path to the generated SARIF file'
+  issues-count:
+    description: 'Total number of issues converted'
+  rules-count:
+    description: 'Number of unique rules'
+  components-count:
+    description: 'Number of affected components/files'
+  blocker-count:
+    description: 'Number of BLOCKER severity issues'
+  critical-count:
+    description: 'Number of CRITICAL severity issues'
+  major-count:
+    description: 'Number of MAJOR severity issues'
+  minor-count:
+    description: 'Number of MINOR severity issues'
+  info-count:
+    description: 'Number of INFO severity issues'
+  bugs-count:
+    description: 'Number of BUG type issues'
+  vulnerabilities-count:
+    description: 'Number of VULNERABILITY type issues'
+  code-smells-count:
+    description: 'Number of CODE_SMELL type issues'
+  hotspots-count:
+    description: 'Number of SECURITY_HOTSPOT type issues'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+
