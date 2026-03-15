@@ -168,7 +168,8 @@ function logStats(stats: ConversionStats): void {
 }
 
 function maybeWarnAboutProjectKey(config: ActionConfig): void {
-  const hasBranchOrPr = config.branch != null || config.pullRequestNumber != null;
+  const hasBranchOrPr =
+    config.branch != null || config.pullRequestNumber != null;
   if (!hasBranchOrPr) {
     return;
   }
@@ -274,4 +275,4 @@ function handleError(error: unknown): void {
 // Run
 // ─────────────────────────────────────────────────────────────────────────────
 
-run();
+run().catch(handleError);

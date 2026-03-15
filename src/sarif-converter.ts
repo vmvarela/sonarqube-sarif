@@ -229,11 +229,14 @@ export class SarifConverter {
           };
 
           if (loc.textRange) {
-            location.location.physicalLocation!.region = {
-              startLine: loc.textRange.startLine,
-              startColumn: loc.textRange.startOffset + 1,
-              endLine: loc.textRange.endLine,
-              endColumn: loc.textRange.endOffset + 1,
+            location.location.physicalLocation = {
+              ...location.location.physicalLocation,
+              region: {
+                startLine: loc.textRange.startLine,
+                startColumn: loc.textRange.startOffset + 1,
+                endLine: loc.textRange.endLine,
+                endColumn: loc.textRange.endOffset + 1,
+              },
             };
           }
 

@@ -42,7 +42,9 @@ export async function getChangedFiles(
     }
 
     core.debug(`Changed files in PR #${pullRequestNumber}: ${files.length}`);
-    core.debug(`Files: ${files.slice(0, 10).join(", ")}${files.length > 10 ? "..." : ""}`);
+    core.debug(
+      `Files: ${files.slice(0, 10).join(", ")}${files.length > 10 ? "..." : ""}`,
+    );
 
     return files;
   } catch (error) {

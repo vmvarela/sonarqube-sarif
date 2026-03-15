@@ -46,7 +46,7 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 function emptyToUndefined(value: string): string | undefined {
-  return value === "" ? undefined : value;
+  return value.trim() === "" ? undefined : value;
 }
 
 /**
@@ -129,7 +129,9 @@ export function parseConfig(): ActionConfig {
   // PR comment is enabled by default when in a PR context
   const prCommentInput = core.getInput("pr-comment");
   const prComment =
-    prCommentInput === "" ? Boolean(pullRequestNumber) : prCommentInput === "true";
+    prCommentInput === ""
+      ? Boolean(pullRequestNumber)
+      : prCommentInput === "true";
 
   // Parse fail-on-severity (optional - undefined means never fail)
   const failOnSeverityInput = core
@@ -146,7 +148,9 @@ export function parseConfig(): ActionConfig {
     projectKey,
     projectKeySource,
     repositoryProjectKey: repositoryName,
-    outputFile: emptyToUndefined(core.getInput("output-file")) ?? DEFAULT_CONFIG.outputFile,
+    outputFile:
+      emptyToUndefined(core.getInput("output-file")) ??
+      DEFAULT_CONFIG.outputFile,
     branch: emptyToUndefined(core.getInput("branch")),
     pullRequestNumber,
     waitForProcessing: core.getInput("wait-for-processing") !== "false",

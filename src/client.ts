@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosError } from "axios";
+import axios, { AxiosInstance } from "axios";
 import * as core from "@actions/core";
 import { SonarQubeSearchResponse, SonarQubeRule } from "./sonarqube-types";
 import { ActionConfig } from "./config";
@@ -430,32 +430,27 @@ export class SonarQubeClient {
     }
 
     if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
-
-      if (axiosError.response) {
-        const status = axiosError.response.status;
-        const data = axiosError.response.data;
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
         const sonarMsg = extractSonarErrors(data);
 
-        return createHttpError(status, sonarMsg ?? axiosError.message, data);
+        return createHttpError(status, sonarMsg ?? error.message, data);
       }
 
-      if (
-        axiosError.code === "ECONNREFUSED" ||
-        axiosError.code === "ENOTFOUND"
-      ) {
+      if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
         return createConnectionError(
           `Cannot connect to ${this.config.sonarHostUrl}`,
-          axiosError,
+          error,
         );
       }
 
-      if (axiosError.code === "ETIMEDOUT") {
+      if (error.code === "ETIMEDOUT") {
         return new SonarQubeError(
           `Request timeout while ${context}`,
           "TIMEOUT",
           undefined,
-          axiosError.message,
+          error.message,
         );
       }
     }

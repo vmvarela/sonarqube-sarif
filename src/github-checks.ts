@@ -41,7 +41,7 @@ export function shouldFailCheck(
   }
 
   const threshold = SEVERITY_ORDER[failOnSeverity];
-  
+
   // Check if any severity at or above threshold has issues
   for (const [severity, count] of Object.entries(stats.bySeverity)) {
     if (count > 0 && SEVERITY_ORDER[severity as SeverityLevel] >= threshold) {
@@ -171,11 +171,15 @@ export function formatCheckSummary(
 
     if (stats.filtered > 0) {
       lines.push("");
-      lines.push(`> ℹ️ ${stats.filtered} issues were filtered out (below ${config.minSeverity} severity threshold)`);
+      lines.push(
+        `> ℹ️ ${stats.filtered} issues were filtered out (below ${config.minSeverity} severity threshold)`,
+      );
     }
 
     // Severity breakdown
-    const severityEntries = Object.entries(stats.bySeverity).filter(([_, count]) => count > 0);
+    const severityEntries = Object.entries(stats.bySeverity).filter(
+      ([_, count]) => count > 0,
+    );
     if (severityEntries.length > 0) {
       lines.push("");
       lines.push("### By Severity");
@@ -188,7 +192,9 @@ export function formatCheckSummary(
     }
 
     // Type breakdown
-    const typeEntries = Object.entries(stats.byType).filter(([_, count]) => count > 0);
+    const typeEntries = Object.entries(stats.byType).filter(
+      ([_, count]) => count > 0,
+    );
     if (typeEntries.length > 0) {
       lines.push("");
       lines.push("### By Type");
@@ -202,7 +208,9 @@ export function formatCheckSummary(
   }
 
   lines.push("");
-  lines.push(`🔒 [View in Security Tab](${securityTabUrl}) · 📊 [View in SonarQube](${sonarQubeUrl})`);
+  lines.push(
+    `🔒 [View in Security Tab](${securityTabUrl}) · 📊 [View in SonarQube](${sonarQubeUrl})`,
+  );
 
   return lines.join("\n");
 }
@@ -231,9 +239,10 @@ export async function createCheckRun(params: CheckRunParams): Promise<void> {
     const summary = formatCheckSummary(stats, config);
 
     const issueWord = stats.totalIssues === 1 ? "issue" : "issues";
-    const title = stats.totalIssues === 0
-      ? "No issues found"
-      : `Found ${stats.totalIssues} ${issueWord}`;
+    const title =
+      stats.totalIssues === 0
+        ? "No issues found"
+        : `Found ${stats.totalIssues} ${issueWord}`;
 
     await octokit.rest.checks.create({
       owner,
@@ -253,7 +262,7 @@ export async function createCheckRun(params: CheckRunParams): Promise<void> {
 
     if (conclusion === "failure") {
       core.setFailed(
-        `SonarQube analysis found issues at or above ${config.failOnSeverity} severity`,
+        `SonarQube analysis found issues at or above ${config.failOnSeverity ?? "configured"} severity`,
       );
     }
   } catch (error) {
