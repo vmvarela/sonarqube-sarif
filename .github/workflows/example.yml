@@ -74,13 +74,21 @@ jobs:
       - name: Setup SonarQube (change default password and create token)
         id: sonar_setup
         env:
-          SONAR_ADMIN_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+          # Password must satisfy SonarQube complexity rules:
+          # min 12 chars, at least 1 uppercase, 1 digit, 1 special character.
+          SONAR_ADMIN_PASSWORD: "Ci!Run-${{ github.run_id }}-${{ github.run_attempt }}"
         run: |
-          # Change default admin password (required before API token generation)
-          curl -sf -X POST \
+          # Change default admin password (required before API token generation).
+          # Use -w to show HTTP status on failure without suppressing the body.
+          HTTP_STATUS=$(curl -s -o /tmp/sq_pw_response.txt -w "%{http_code}" -X POST \
             -H "Authorization: Basic $(printf 'admin:admin' | base64 -w0)" \
             "http://localhost:9000/api/users/change_password" \
-            -d "login=admin&password=${SONAR_ADMIN_PASSWORD}&previousPassword=admin"
+            -d "login=admin&password=${SONAR_ADMIN_PASSWORD}&previousPassword=admin")
+          if [ "${HTTP_STATUS}" != "200" ] && [ "${HTTP_STATUS}" != "204" ]; then
+            echo "Password change failed (HTTP ${HTTP_STATUS}):"
+            cat /tmp/sq_pw_response.txt
+            exit 1
+          fi
 
           # Generate a global analysis token for this run
           TOKEN=$(curl -sf -X POST \
