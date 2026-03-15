@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security disclosure
-    url: https://github.com/vmvarela/sonarqube-ce-sarif-action/security/policy
+    url: https://github.com/vmvarela/sonarqube-sarif/security/policy
     about: Please report security vulnerabilities through the private security advisory flow.

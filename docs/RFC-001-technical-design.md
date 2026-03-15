@@ -1,11 +1,11 @@
-# RFC-001: SonarQube CE to SARIF Converter
+# RFC-001: SonarQube to SARIF Converter
 
 **Status:** Implemented  
-**Repository:** `vmvarela/sonarqube-ce-sarif-action`
+**Repository:** `vmvarela/sonarqube-sarif`
 
 ## What problem does this solve?
 
-SonarQube Community Edition can find issues, but it stops short of the workflow most GitHub users expect. There is no native SARIF export, no GitHub Security integration, and no lightweight PR feedback loop.
+SonarQube can find issues, but it stops short of the workflow most GitHub users expect. There is no native SARIF export, no GitHub Security integration, and no lightweight PR feedback loop. This applies to all editions: Community, Developer, Enterprise, and Data Center.
 
 This action exists to move SonarQube findings into GitHub with the least amount of ceremony possible. It fetches issues from SonarQube, converts them to SARIF, writes the file, creates a Check Run, and optionally posts a PR comment.
 
@@ -28,9 +28,11 @@ That gives us one implementation that serves two workflows:
 
 ## Why this shape makes sense
 
-We deliberately do not try to pretend SonarQube CE has first-class PR analysis. It does not. Instead, the action gives reviewers a useful approximation by intersecting SonarQube issues with the files changed in the pull request.
+On Community Edition, SonarQube does not have first-class PR analysis, so the action gives reviewers a useful approximation by intersecting SonarQube issues with the files changed in the pull request.
 
-That trade-off is honest and practical. Reviewers see feedback near their changes, while the GitHub Security tab stays tied to the branch you actually ship.
+On Developer Edition and above, SonarQube itself can analyze branches and PRs. In those cases the `branch` input lets you target the specific SonarQube branch result, which makes the filtering more precise.
+
+Either way, the trade-off is honest and practical: reviewers see feedback near their changes, while the GitHub Security tab stays tied to the branch you actually ship.
 
 ## Runtime flow
 
@@ -58,16 +60,16 @@ flowchart TD
 
 The code is intentionally split by responsibility instead of building one oversized `main.ts`.
 
-| Module | Responsibility |
-|--------|----------------|
-| `src/config.ts` | Parse inputs, apply defaults, infer PR context, and validate user data. |
-| `src/client.ts` | Talk to SonarQube, handle pagination, wait for processing, and normalize API responses. |
-| `src/pr-files.ts` | Ask GitHub which files changed in the PR and filter issues to those files. |
-| `src/sarif-converter.ts` | Map SonarQube issues and rules into SARIF v2.1.0 structures. |
-| `src/stats.ts` | Compute counts used for outputs, summaries, and gating. |
-| `src/github-checks.ts` | Create the Check Run, annotations, and severity-based failure behavior. |
-| `src/pr-comment.ts` | Upsert a single PR comment with summary tables and links. |
-| `src/errors.ts` | Turn transport and validation failures into actionable messages. |
+| Module                   | Responsibility                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------- |
+| `src/config.ts`          | Parse inputs, apply defaults, infer PR context, and validate user data.                 |
+| `src/client.ts`          | Talk to SonarQube, handle pagination, wait for processing, and normalize API responses. |
+| `src/pr-files.ts`        | Ask GitHub which files changed in the PR and filter issues to those files.              |
+| `src/sarif-converter.ts` | Map SonarQube issues and rules into SARIF v2.1.0 structures.                            |
+| `src/stats.ts`           | Compute counts used for outputs, summaries, and gating.                                 |
+| `src/github-checks.ts`   | Create the Check Run, annotations, and severity-based failure behavior.                 |
+| `src/pr-comment.ts`      | Upsert a single PR comment with summary tables and links.                               |
+| `src/errors.ts`          | Turn transport and validation failures into actionable messages.                        |
 
 ## Data contract
 
@@ -123,12 +125,12 @@ That keeps the behavior obvious and makes it easy to combine with a separate Son
 The converter emits SARIF `2.1.0` and keeps the mapping straightforward:
 
 | SonarQube severity | SARIF level |
-|--------------------|-------------|
-| `BLOCKER` | `error` |
-| `CRITICAL` | `error` |
-| `MAJOR` | `warning` |
-| `MINOR` | `note` |
-| `INFO` | `note` |
+| ------------------ | ----------- |
+| `BLOCKER`          | `error`     |
+| `CRITICAL`         | `error`     |
+| `MAJOR`            | `warning`   |
+| `MINOR`            | `note`      |
+| `INFO`             | `note`      |
 
 Security-oriented rules also get a `security-severity` property so GitHub can present them more naturally in the Security UI.
 
@@ -165,7 +167,7 @@ This is the right level of testing for the current design. The action is mostly 
 
 ## What we are not building
 
-This project is not trying to replace SonarQube, implement a custom code scanner, or emulate paid SonarQube features perfectly. It is a translator and feedback bridge.
+This project is not trying to replace SonarQube, implement a custom code scanner, or emulate paid SonarQube features. It is a translator and feedback bridge that works across all SonarQube editions.
 
 That constraint keeps the code understandable and the behavior predictable.
 

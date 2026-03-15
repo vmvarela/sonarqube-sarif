@@ -1,16 +1,30 @@
-# SonarQube CE → GitHub Security Tab
+# SonarQube → GitHub Security Tab
 
 [![CI](https://github.com/vmvarela/sonarqube-sarif/actions/workflows/ci.yml/badge.svg)](https://github.com/vmvarela/sonarqube-sarif/actions/workflows/ci.yml)
-[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-v1-blue?logo=github)](https://github.com/marketplace/actions/sonarqube-community-to-github-security-tab-sarif)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-v1-blue?logo=github)](https://github.com/marketplace/actions/sonarqube-to-github-security-tab-sarif)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## What is this?
 
-SonarQube Community Edition can analyze code, but it does not give you the GitHub experience most teams actually want: pull request annotations, a check run summary, and SARIF that GitHub can ingest. This action fills that gap.
+SonarQube can analyze code, but it does not give you the GitHub experience most teams actually want: pull request annotations, a check run summary, and SARIF that GitHub can ingest. This action fills that gap.
 
 It fetches issues from the SonarQube REST API, converts them to SARIF, writes a file for `github/codeql-action/upload-sarif`, creates a GitHub Check Run, and can post a PR summary comment. In pull requests, it narrows the feedback to files changed in the PR so reviewers are not buried in the entire backlog.
 
-If you already run SonarQube CE and want the results to show up where developers work, this is the missing piece.
+If you already run SonarQube and want the results to show up where developers work, this is the missing piece.
+
+## Supported editions
+
+The action works against the SonarQube REST API and is edition-agnostic:
+
+| Edition          | Works?  | Notes                                                   |
+| ---------------- | ------- | ------------------------------------------------------- |
+| Community (CE)   | Yes     | Full support. No branch analysis in SonarQube itself.   |
+| Developer (DE)   | Yes     | Branch and PR analysis available on the SonarQube side. |
+| Enterprise (EE)  | Yes     | Same API surface.                                       |
+| Data Center (DC) | Yes     | Same API surface.                                       |
+| SonarCloud       | Partial | API differs; not officially tested.                     |
+
+For Developer Edition and above, SonarQube itself can perform true PR analysis. The `branch` input lets you target a specific branch when fetching issues, which pairs well with DE/EE branch analysis.
 
 ## Quick Start
 
@@ -72,7 +86,9 @@ Use this action in two modes:
 1. **Pull requests:** rely on the Check Run and optional PR comment.
 2. **Default branch pushes:** upload the generated SARIF to GitHub code scanning.
 
-This is better than uploading SARIF on PRs because SonarQube CE does not do true PR analysis. It analyzes the project state SonarQube knows about, and this action filters the results to changed files. That is useful for review, but it is not the same as “only issues introduced by this PR.”
+On Community Edition, SonarQube does not do true PR analysis — it analyzes the project state it knows about. This action filters the results to changed files, which is useful for review but is not the same as "only issues introduced by this PR."
+
+On Developer Edition and above, SonarQube can analyze branches and PRs natively. Pair the `branch` input with SonarQube's branch analysis for more precise results.
 
 ## Inputs you will probably care about
 
@@ -81,6 +97,7 @@ These are the knobs most teams end up using:
 | Input                 | Default             | Why you would change it                                          |
 | --------------------- | ------------------- | ---------------------------------------------------------------- |
 | `project-key`         | repository name     | Your SonarQube project key does not match the repo name.         |
+| `branch`              | unset               | Target a specific SonarQube branch (useful for DE/EE/DC).        |
 | `min-severity`        | `INFO`              | Ignore low-severity noise.                                       |
 | `fail-on-severity`    | unset               | Turn findings into a failing check.                              |
 | `wait-for-processing` | `true`              | Disable polling if your token lacks Execute Analysis permission. |
@@ -132,6 +149,16 @@ If your SonarQube token cannot query Compute Engine status, skip polling and wai
     processing-delay: 60
 ```
 
+On Developer Edition, target a specific branch to fetch branch-specific issues.
+
+```yaml
+- uses: vmvarela/sonarqube-sarif@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    branch: ${{ github.ref_name }}
+```
+
 If the PR comment becomes noise, keep the Check Run and disable the comment.
 
 ```yaml
@@ -179,12 +206,12 @@ On the SonarQube side, **Browse** is required. **Execute Analysis** is only need
 
 ## Limitations
 
-- **Not true PR analysis.** SonarQube CE does not understand PRs the way paid editions do.
 - **PR filtering depends on changed-file lookup.** If GitHub file lookup fails, the action falls back to the full issue set.
 - **Check annotations are capped at 50.** That is a GitHub Check Run limit, not a project limit.
 - **The action does not evaluate SonarQube Quality Gates.** `fail-on-severity` is a separate, issue-based gate.
+- **Community Edition has no branch or PR analysis.** On CE, SonarQube analyzes the project as a whole; this action filters the result to changed files as a best-effort approximation.
 
-If you need branch-aware or issue-baseline-aware PR decoration, SonarQube Developer Edition is the better tool.
+If you need baseline-aware PR decoration on Community Edition, SonarQube Developer Edition is the better tool.
 
 ## Related docs
 

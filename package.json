@@ -1,7 +1,7 @@
 {
   "name": "sonarqube-sarif",
   "version": "0.1.0",
-  "description": "GitHub Action to convert SonarQube Community Edition issues to SARIF format",
+  "description": "GitHub Action to convert SonarQube issues to SARIF format. Works with Community, Developer, Enterprise, and Data Center editions.",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc && esbuild src/main.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --minify",
