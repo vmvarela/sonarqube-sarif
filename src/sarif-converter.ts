@@ -230,7 +230,10 @@ export class SarifConverter {
 
           if (loc.textRange) {
             location.location.physicalLocation = {
-              ...location.location.physicalLocation,
+              artifactLocation: {
+                uri: this.getFilePath(loc.component),
+                uriBaseId: "%SRCROOT%",
+              },
               region: {
                 startLine: loc.textRange.startLine,
                 startColumn: loc.textRange.startOffset + 1,
