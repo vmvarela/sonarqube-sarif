@@ -25,7 +25,7 @@ import {
 // Main Entry Point
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   try {
     // Parse and validate configuration
     const config = parseConfig();
@@ -128,6 +128,7 @@ async function run(): Promise<void> {
       core.setFailed(
         `SonarQube analysis found issues at or above ${config.failOnSeverity} severity`,
       );
+      return;
     }
 
     // Post PR comment if enabled, in PR context, and issues were found
