@@ -368,7 +368,7 @@ describe("github-checks", () => {
       );
     });
 
-    it("marks check as failure when failOnSeverity threshold met", async () => {
+    it("marks check run conclusion as failure when failOnSeverity threshold met", async () => {
       mockCreateCheck.mockResolvedValueOnce({});
 
       await createCheckRun({
@@ -381,9 +381,9 @@ describe("github-checks", () => {
       expect(mockCreateCheck).toHaveBeenCalledWith(
         expect.objectContaining({ conclusion: "failure" }),
       );
-      expect(core.setFailed).toHaveBeenCalledWith(
-        expect.stringContaining("CRITICAL severity"),
-      );
+      // core.setFailed is no longer called inside createCheckRun — it is the
+      // responsibility of main.ts to call shouldFailCheck() and setFailed().
+      expect(core.setFailed).not.toHaveBeenCalled();
     });
 
     it("marks check as success when no issues", async () => {
