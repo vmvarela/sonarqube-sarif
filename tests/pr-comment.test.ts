@@ -103,17 +103,27 @@ describe("pr-comment", () => {
       expect(markdown).toContain("| BUG | 3 |");
       expect(markdown).toContain("| VULNERABILITY | 2 |");
       expect(markdown).toContain("🔒 [View in Security Tab]");
-      expect(markdown).toContain("https://github.com/test-owner/test-repo/security/code-scanning");
+      expect(markdown).toContain(
+        "https://github.com/test-owner/test-repo/security/code-scanning",
+      );
       expect(markdown).toContain("pr%3A42");
       expect(markdown).toContain("tool%3ASonarQube");
       expect(markdown).toContain("📊 [View in SonarQube]");
-      expect(markdown).toContain("https://sonar.example.com/dashboard?id=my-project");
+      expect(markdown).toContain(
+        "https://sonar.example.com/dashboard?id=my-project",
+      );
     });
 
     it("includes filtered message when issues were filtered", () => {
       const statsWithFiltered = { ...mockStats, filtered: 5 };
-      const configWithMinSeverity = { ...mockConfig, minSeverity: "MAJOR" as const };
-      const markdown = formatSummaryMarkdown(statsWithFiltered, configWithMinSeverity);
+      const configWithMinSeverity = {
+        ...mockConfig,
+        minSeverity: "MAJOR" as const,
+      };
+      const markdown = formatSummaryMarkdown(
+        statsWithFiltered,
+        configWithMinSeverity,
+      );
 
       expect(markdown).toContain("5 issues were filtered out");
       expect(markdown).toContain("below MAJOR severity threshold");
@@ -175,7 +185,7 @@ describe("pr-comment", () => {
   });
 
   describe("findExistingComment", () => {
-    it("finds comment with marker", async () => {
+    it("finds comment with marker on first page", async () => {
       const { getOctokit } = await import("@actions/github");
       const octokit = getOctokit("token");
 
@@ -195,15 +205,83 @@ describe("pr-comment", () => {
       );
 
       expect(result).toBe(42);
+      expect(mockListComments).toHaveBeenCalledTimes(1);
       expect(mockListComments).toHaveBeenCalledWith({
         owner: "owner",
         repo: "repo",
         issue_number: 123,
         per_page: 100,
+        page: 1,
       });
     });
 
-    it("returns null when no comment with marker exists", async () => {
+    it("finds comment with marker on second page", async () => {
+      const { getOctokit } = await import("@actions/github");
+      const octokit = getOctokit("token");
+
+      // Page 1: 100 comments without marker
+      const page1 = Array.from({ length: 100 }, (_, i) => ({
+        id: i + 1,
+        body: `Generic comment ${i + 1}`,
+      }));
+      // Page 2: marker comment
+      const page2 = [{ id: 200, body: `${COMMENT_MARKER}\nFound it` }];
+
+      mockListComments
+        .mockResolvedValueOnce({ data: page1 })
+        .mockResolvedValueOnce({ data: page2 });
+
+      const result = await findExistingComment(
+        octokit as any,
+        "owner",
+        "repo",
+        123,
+      );
+
+      expect(result).toBe(200);
+      expect(mockListComments).toHaveBeenCalledTimes(2);
+      expect(mockListComments).toHaveBeenNthCalledWith(1, {
+        owner: "owner",
+        repo: "repo",
+        issue_number: 123,
+        per_page: 100,
+        page: 1,
+      });
+      expect(mockListComments).toHaveBeenNthCalledWith(2, {
+        owner: "owner",
+        repo: "repo",
+        issue_number: 123,
+        per_page: 100,
+        page: 2,
+      });
+    });
+
+    it("returns null when no comment with marker exists across all pages", async () => {
+      const { getOctokit } = await import("@actions/github");
+      const octokit = getOctokit("token");
+
+      // Page 1: 100 comments without marker (full page — triggers next page)
+      const page1 = Array.from({ length: 100 }, (_, i) => ({
+        id: i + 1,
+        body: `Generic comment ${i + 1}`,
+      }));
+
+      mockListComments
+        .mockResolvedValueOnce({ data: page1 })
+        .mockResolvedValueOnce({ data: [] }); // page 2 empty → stop
+
+      const result = await findExistingComment(
+        octokit as any,
+        "owner",
+        "repo",
+        123,
+      );
+
+      expect(result).toBeNull();
+      expect(mockListComments).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops after first page when fewer than 100 comments", async () => {
       const { getOctokit } = await import("@actions/github");
       const octokit = getOctokit("token");
 
@@ -222,6 +300,7 @@ describe("pr-comment", () => {
       );
 
       expect(result).toBeNull();
+      expect(mockListComments).toHaveBeenCalledTimes(1);
     });
 
     it("returns null on error", async () => {
