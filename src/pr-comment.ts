@@ -94,19 +94,30 @@ export async function findExistingComment(
   prNumber: number,
 ): Promise<number | null> {
   try {
-    const { data: comments } = await octokit.rest.issues.listComments({
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: 100,
-    });
+    let page = 1;
+    const perPage = 100;
 
-    const existingComment = comments.find(
-      (comment: (typeof comments)[number]) =>
+    while (true) {
+      const { data: comments } = await octokit.rest.issues.listComments({
+        owner,
+        repo,
+        issue_number: prNumber,
+        per_page: perPage,
+        page,
+      });
+
+      if (comments.length === 0) break;
+
+      const found = comments.find((comment: (typeof comments)[number]) =>
         comment.body?.includes(COMMENT_MARKER),
-    );
+      );
+      if (found) return found.id;
 
-    return existingComment?.id ?? null;
+      if (comments.length < perPage) break;
+      page++;
+    }
+
+    return null;
   } catch (error) {
     core.debug(`Failed to list comments: ${error}`);
     return null;
