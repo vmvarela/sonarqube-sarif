@@ -10,19 +10,63 @@ categories:
   - title: "🚀 Features"
     labels:
       - "type:feature"
+    exclude-labels:
+      - "type:bug"
+      - "type:chore"
+      - "type:docs"
+      - "type:spike"
+      - "tech-debt"
+      - "dependencies"
   - title: "🐛 Bug Fixes"
     labels:
       - "type:bug"
+    exclude-labels:
+      - "type:feature"
+      - "type:chore"
+      - "type:docs"
+      - "type:spike"
+      - "tech-debt"
+      - "dependencies"
   - title: "🧰 Maintenance"
     labels:
       - "type:chore"
       - "tech-debt"
+    exclude-labels:
+      - "type:feature"
+      - "type:bug"
+      - "type:docs"
+      - "type:spike"
+      - "dependencies"
   - title: "📝 Documentation"
     labels:
       - "type:docs"
+    exclude-labels:
+      - "type:feature"
+      - "type:bug"
+      - "type:chore"
+      - "type:spike"
+      - "tech-debt"
+      - "dependencies"
   - title: "🔬 Spikes & Research"
     labels:
       - "type:spike"
+    exclude-labels:
+      - "type:feature"
+      - "type:bug"
+      - "type:chore"
+      - "type:docs"
+      - "tech-debt"
+      - "dependencies"
+  - title: "⬆️ Dependency Updates"
+    labels:
+      - "dependencies"
+    exclude-labels:
+      - "type:feature"
+      - "type:bug"
+      - "type:chore"
+      - "type:docs"
+      - "type:spike"
+      - "tech-debt"
 change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
 change-title-escapes: '\<*_&'
 autolabeler:
@@ -44,6 +88,10 @@ autolabeler:
   - label: "breaking"
     title:
       - '/^[a-z]+(\(.+\))?!:/i'
+  - label: "dependencies"
+    author:
+      - "dependabot[bot]"
+      - "dependabot-preview[bot]"
 version-resolver:
   major:
     labels:

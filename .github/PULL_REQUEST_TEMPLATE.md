@@ -13,3 +13,4 @@ Closes #
 - [ ] Built artifacts updated when required (`lib/`, `dist/`)
 - [ ] Self-reviewed
 - [ ] Documentation updated if behavior changed
+- [ ] All `status:*` labels removed from the linked issue
