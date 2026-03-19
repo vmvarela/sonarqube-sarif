@@ -275,12 +275,6 @@ export async function createCheckRun(params: CheckRunParams): Promise<void> {
     });
 
     core.info(`Created check run: ${title} (${conclusion})`);
-
-    if (conclusion === "failure") {
-      core.setFailed(
-        `SonarQube analysis found issues at or above ${config.failOnSeverity ?? "configured"} severity`,
-      );
-    }
   } catch (error) {
     if (error instanceof Error) {
       core.warning(`Failed to create check run: ${error.message}`);

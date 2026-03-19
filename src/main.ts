@@ -14,7 +14,7 @@ import {
   ConversionStats,
 } from "./stats";
 import { writePrComment } from "./pr-comment";
-import { createCheckRun } from "./github-checks";
+import { createCheckRun, shouldFailCheck } from "./github-checks";
 import {
   getChangedFiles,
   filterIssuesByChangedFiles,
@@ -25,7 +25,7 @@ import {
 // Main Entry Point
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   try {
     // Parse and validate configuration
     const config = parseConfig();
@@ -120,6 +120,16 @@ async function run(): Promise<void> {
       issues: data.issues,
       components: data.components,
     });
+
+    // Fail the action if severity threshold is met — evaluated independently of
+    // check run creation so it works even when the GitHub token is missing or
+    // the check run API call fails.
+    if (shouldFailCheck(stats, config.failOnSeverity)) {
+      core.setFailed(
+        `SonarQube analysis found issues at or above ${config.failOnSeverity} severity`,
+      );
+      return;
+    }
 
     // Post PR comment if enabled, in PR context, and issues were found
     if (config.prComment && config.pullRequestNumber && stats.totalIssues > 0) {
