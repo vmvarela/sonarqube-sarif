@@ -375,6 +375,7 @@ export class SonarQubeClient {
   ): Promise<void> {
     // Fetch rules in parallel with concurrency limit
     const BATCH_SIZE = 5;
+    let failedCount = 0;
 
     for (let i = 0; i < ruleKeys.length; i += BATCH_SIZE) {
       const batch = ruleKeys.slice(i, i + BATCH_SIZE);
@@ -401,9 +402,17 @@ export class SonarQubeClient {
               });
             }
           } catch (error) {
+            failedCount++;
             core.debug(`Could not fetch rule ${key}: ${error}`);
           }
         }),
+      );
+    }
+
+    if (failedCount > 0) {
+      core.warning(
+        `Could not fetch details for ${failedCount}/${ruleKeys.length} rules. ` +
+          `Affected rules will use basic metadata from the issues response.`,
       );
     }
   }

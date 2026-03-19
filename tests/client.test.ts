@@ -321,6 +321,119 @@ describe("SonarQubeClient", () => {
       expect(result.rules).toHaveLength(1);
       expect(result.rules[0].key).toBe("ts:S9999");
       expect(result.rules[0].name).toBe("Missing Rule");
+      expect(core.warning).not.toHaveBeenCalled();
+    });
+
+    it("warns with summary when some rule detail fetches fail", async () => {
+      // Issues response with two missing rules
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          paging: { total: 2 },
+          issues: [
+            {
+              key: "issue-1",
+              rule: "ts:S1111",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
+            {
+              key: "issue-2",
+              rule: "ts:S2222",
+              severity: "MINOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 2",
+              status: "OPEN",
+              type: "CODE_SMELL",
+            },
+          ],
+          components: [
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
+          ],
+          rules: [],
+        },
+      });
+
+      // First rule fetch succeeds
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          rule: {
+            key: "ts:S1111",
+            name: "Rule 1111",
+            status: "READY",
+            lang: "ts",
+            severity: "MAJOR",
+            type: "BUG",
+          },
+        },
+      });
+
+      // Second rule fetch fails
+      axiosMocks.get.mockRejectedValueOnce(new Error("Not found"));
+
+      const client = new SonarQubeClient(mockConfig);
+      await client.fetchAllIssues();
+
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("Could not fetch details for 1/2 rules"),
+      );
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Affected rules will use basic metadata from the issues response",
+        ),
+      );
+      expect(core.debug).toHaveBeenCalledWith(
+        expect.stringContaining("Could not fetch rule ts:S2222"),
+      );
+    });
+
+    it("warns with summary when all rule detail fetches fail", async () => {
+      // Issues response with one missing rule
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          paging: { total: 1 },
+          issues: [
+            {
+              key: "issue-1",
+              rule: "ts:S9999",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
+          ],
+          components: [
+            {
+              key: "project:src/a.ts",
+              name: "a.ts",
+              path: "src/a.ts",
+              qualifier: "FIL",
+            },
+          ],
+          rules: [],
+        },
+      });
+
+      // Rule fetch fails
+      axiosMocks.get.mockRejectedValueOnce(new Error("SonarQube unavailable"));
+
+      const client = new SonarQubeClient(mockConfig);
+      await client.fetchAllIssues();
+
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("Could not fetch details for 1/1 rules"),
+      );
     });
 
     it("includes branch parameter when configured", async () => {
