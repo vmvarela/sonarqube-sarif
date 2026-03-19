@@ -130,7 +130,7 @@ jobs:
       # Keep the SARIF file as a workflow artifact for inspection
       - name: Upload SARIF as artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sarif-results
           path: sonarqube-results.sarif
