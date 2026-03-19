@@ -152,14 +152,16 @@ describe("pr-files", () => {
       expect(mockListFiles).toHaveBeenCalledTimes(2);
     });
 
-    it("returns empty array on error", async () => {
+    it("returns empty array on error and warns about fallback", async () => {
       mockListFiles.mockRejectedValueOnce(new Error("API error"));
 
       const files = await getChangedFiles("test-token", 123);
 
       expect(files).toEqual([]);
       expect(core.warning).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to fetch PR files"),
+        expect.stringContaining(
+          "Failed to fetch PR files: API error. Falling back to showing all issues (PR file filtering disabled).",
+        ),
       );
     });
   });
