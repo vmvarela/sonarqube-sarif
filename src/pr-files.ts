@@ -49,12 +49,15 @@ export async function getChangedFiles(
     return files;
   } catch (error) {
     if (error instanceof Error) {
-      core.warning(`Failed to fetch PR files: ${error.message}`);
+      core.warning(
+        `Failed to fetch PR files: ${error.message}. Falling back to showing all issues (PR file filtering disabled).`,
+      );
       core.debug(error.stack ?? "No stack trace");
     } else {
-      core.warning("Failed to fetch PR files: Unknown error");
+      core.warning(
+        "Failed to fetch PR files: Unknown error. Falling back to showing all issues (PR file filtering disabled).",
+      );
     }
-    // Return empty array - will show all issues as fallback
     return [];
   }
 }
