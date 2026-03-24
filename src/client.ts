@@ -30,6 +30,20 @@ const TASK_STATUS = {
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Retry constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000; // 1s → 2s → 4s
+const JITTER_FACTOR = 0.2; // ±20% randomisation to avoid thundering herd
+
+/** HTTP status codes that indicate a transient failure worth retrying. */
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+/** Network-level error codes that are safe to retry. */
+const RETRYABLE_ERROR_CODES = new Set(["ETIMEDOUT", "ECONNRESET"]);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -127,6 +141,41 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Returns true when the error represents a transient condition that is safe
+ * to retry (429 rate-limit, 5xx server errors, network timeouts / resets).
+ * Permanent errors (401, 403, 404, 422, connection refused, …) return false.
+ */
+function isRetryableError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+
+  // Network-level errors that are recoverable
+  if (error.code && RETRYABLE_ERROR_CODES.has(error.code)) return true;
+
+  // HTTP response errors – only retry on known transient status codes
+  if (error.response) {
+    return RETRYABLE_STATUS_CODES.has(error.response.status);
+  }
+
+  return false;
+}
+
+/**
+ * Extract the delay (in milliseconds) from a `Retry-After` response header.
+ * Only the numeric seconds format is supported.  Returns `undefined` when the
+ * header is absent or cannot be parsed as a positive integer.
+ */
+function parseRetryAfterMs(
+  headers: Record<string, unknown> | undefined,
+): number | undefined {
+  if (!headers) return undefined;
+  const raw = headers["retry-after"];
+  if (typeof raw !== "string" && typeof raw !== "number") return undefined;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+  return seconds * 1000;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SonarQube Client
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,9 +234,13 @@ export class SonarQubeClient {
       core.debug(`Fetching page ${page}: ${JSON.stringify(params)}`);
 
       try {
-        const response = await this.client.get(API_ENDPOINTS.ISSUES_SEARCH, {
-          params,
-        });
+        const response = await this.withRetry(
+          () =>
+            this.client.get(API_ENDPOINTS.ISSUES_SEARCH, {
+              params,
+            }),
+          `fetching issues page ${page}`,
+        );
         const normalized = normalizeIssuesResponse(response.data);
 
         if (page === 1) {
@@ -220,7 +273,9 @@ export class SonarQubeClient {
 
         page++;
       } catch (error) {
-        throw this.handleError(error, "fetching issues");
+        throw error instanceof SonarQubeError
+          ? error
+          : this.handleError(error, "fetching issues");
       }
     }
 
@@ -383,9 +438,13 @@ export class SonarQubeClient {
       await Promise.all(
         batch.map(async (key) => {
           try {
-            const response = await this.client.get(API_ENDPOINTS.RULES_SHOW, {
-              params: { key },
-            });
+            const response = await this.withRetry(
+              () =>
+                this.client.get(API_ENDPOINTS.RULES_SHOW, {
+                  params: { key },
+                }),
+              `fetching rule ${key}`,
+            );
 
             const rule = response.data?.rule;
             if (rule && typeof rule.key === "string") {
@@ -448,6 +507,56 @@ export class SonarQubeClient {
       components: Array.from(componentMap.values()),
       rules: Array.from(ruleMap.values()),
     };
+  }
+
+  /**
+   * Execute `fn` with exponential backoff retry for transient errors.
+   *
+   * - Retries up to MAX_RETRIES times on 429 / 5xx / ETIMEDOUT / ECONNRESET.
+   * - Respects `Retry-After` header (numeric seconds) on 429 responses.
+   * - Applies ±JITTER_FACTOR randomisation to computed delays.
+   * - Logs each retry at `core.warning` with attempt count and reason.
+   * - Permanent errors (401, 403, 404, …) are never retried.
+   */
+  private async withRetry<T>(
+    fn: () => Promise<T>,
+    context: string,
+  ): Promise<T> {
+    let attempt = 0;
+
+    while (true) {
+      try {
+        return await fn();
+      } catch (error) {
+        attempt++;
+
+        if (!isRetryableError(error) || attempt > MAX_RETRIES) {
+          throw this.handleError(error, context);
+        }
+
+        // Determine how long to wait before the next attempt
+        const axiosErr = axios.isAxiosError(error) ? error : undefined;
+        const retryAfterMs = axiosErr?.response?.headers
+          ? parseRetryAfterMs(
+              axiosErr.response.headers as Record<string, unknown>,
+            )
+          : undefined;
+
+        const baseMs = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        const jitter = baseMs * JITTER_FACTOR * (2 * Math.random() - 1);
+        const delayMs = retryAfterMs ?? Math.round(baseMs + jitter);
+
+        const status = axiosErr?.response?.status;
+        const reason =
+          axiosErr?.code ?? (status ? `HTTP ${status}` : "unknown");
+
+        core.warning(
+          `Retry ${attempt}/${MAX_RETRIES} for "${context}" after ${delayMs}ms (reason: ${reason})`,
+        );
+
+        await sleep(delayMs);
+      }
+    }
   }
 
   private handleError(error: unknown, context: string): SonarQubeError {
