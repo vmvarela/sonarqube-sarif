@@ -1,6 +1,21 @@
-import { describe, it, expect } from "vitest";
-import { calculateStats, filterBySeverity, formatStatsForLog } from "../src/stats";
-import { SonarQubeSearchResponse, SonarQubeIssue } from "../src/sonarqube-types";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  calculateStats,
+  filterBySeverity,
+  formatStatsForLog,
+  setMetricsOutputs,
+} from "../src/stats";
+import type { ProcessingMetrics } from "../src/stats";
+import {
+  SonarQubeSearchResponse,
+  SonarQubeIssue,
+} from "../src/sonarqube-types";
+
+const mockSetOutput = vi.fn();
+
+vi.mock("@actions/core", () => ({
+  setOutput: (...args: unknown[]) => mockSetOutput(...args),
+}));
 
 function createMockIssue(
   overrides: Partial<SonarQubeIssue> = {},
@@ -228,6 +243,79 @@ describe("stats", () => {
       expect(severityLine).toContain("MAJOR: 1");
       expect(typeLine).not.toContain("BUG");
       expect(typeLine).toContain("CODE_SMELL: 1");
+    });
+  });
+
+  describe("setMetricsOutputs", () => {
+    const baseMetrics: ProcessingMetrics = {
+      apiRequestCount: 10,
+      apiErrorCount: 2,
+      apiRetryCount: 1,
+      pagesFetched: 3,
+      ruleFetchSuccessRate: 95.5,
+      sarifFileSizeBytes: 12345,
+      processingTimeMs: 4200,
+    };
+
+    beforeEach(() => {
+      mockSetOutput.mockClear();
+    });
+
+    it("sets all 7 metric outputs", () => {
+      setMetricsOutputs(baseMetrics);
+
+      expect(mockSetOutput).toHaveBeenCalledTimes(7);
+    });
+
+    it("sets api-request-count correctly", () => {
+      setMetricsOutputs(baseMetrics);
+      expect(mockSetOutput).toHaveBeenCalledWith("api-request-count", 10);
+    });
+
+    it("sets api-error-count correctly", () => {
+      setMetricsOutputs(baseMetrics);
+      expect(mockSetOutput).toHaveBeenCalledWith("api-error-count", 2);
+    });
+
+    it("sets api-retry-count correctly", () => {
+      setMetricsOutputs(baseMetrics);
+      expect(mockSetOutput).toHaveBeenCalledWith("api-retry-count", 1);
+    });
+
+    it("sets pages-fetched correctly", () => {
+      setMetricsOutputs(baseMetrics);
+      expect(mockSetOutput).toHaveBeenCalledWith("pages-fetched", 3);
+    });
+
+    it("rounds rule-fetch-success-rate to nearest integer", () => {
+      setMetricsOutputs(baseMetrics); // 95.5 → 96
+      expect(mockSetOutput).toHaveBeenCalledWith("rule-fetch-success-rate", 96);
+    });
+
+    it("sets sarif-file-size-bytes correctly", () => {
+      setMetricsOutputs(baseMetrics);
+      expect(mockSetOutput).toHaveBeenCalledWith(
+        "sarif-file-size-bytes",
+        12345,
+      );
+    });
+
+    it("sets processing-time-ms correctly", () => {
+      setMetricsOutputs(baseMetrics);
+      expect(mockSetOutput).toHaveBeenCalledWith("processing-time-ms", 4200);
+    });
+
+    it("handles 0% rule fetch success rate", () => {
+      setMetricsOutputs({ ...baseMetrics, ruleFetchSuccessRate: 0 });
+      expect(mockSetOutput).toHaveBeenCalledWith("rule-fetch-success-rate", 0);
+    });
+
+    it("handles 100% rule fetch success rate", () => {
+      setMetricsOutputs({ ...baseMetrics, ruleFetchSuccessRate: 100 });
+      expect(mockSetOutput).toHaveBeenCalledWith(
+        "rule-fetch-success-rate",
+        100,
+      );
     });
   });
 });

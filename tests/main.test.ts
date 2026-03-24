@@ -46,6 +46,13 @@ vi.mock("@actions/github", () => ({
 
 const mockFetchAllIssues = vi.fn();
 const mockWaitForProcessing = vi.fn().mockResolvedValue(undefined);
+const mockGetMetrics = vi.fn().mockReturnValue({
+  apiRequestCount: 5,
+  apiErrorCount: 0,
+  apiRetryCount: 0,
+  pagesFetched: 1,
+  ruleFetchSuccessRate: 100,
+});
 
 vi.mock("../src/client", () => ({
   SonarQubeClient: vi.fn().mockImplementation(function () {
@@ -53,6 +60,7 @@ vi.mock("../src/client", () => ({
       fetchAllIssues: mockFetchAllIssues,
       waitForProcessing: mockWaitForProcessing,
       applyProcessingDelay: vi.fn().mockResolvedValue(undefined),
+      getMetrics: mockGetMetrics,
     };
   }),
 }));
@@ -60,6 +68,7 @@ vi.mock("../src/client", () => ({
 vi.mock("fs", () => ({
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
+  statSync: vi.fn().mockReturnValue({ size: 2048 }),
 }));
 
 const mockParseConfig = vi.fn();
@@ -248,5 +257,24 @@ describe("main — fail-on-severity (issue #11)", () => {
     await run();
 
     expect(mockSetFailed).not.toHaveBeenCalled();
+  });
+
+  it("(f) sets processing metric outputs on successful run", async () => {
+    mockParseConfig.mockReturnValue({ ...baseConfig });
+    mockFetchAllIssues.mockResolvedValue(responseWithCritical);
+
+    const { run } = await import("../src/main");
+    await run();
+
+    expect(mockSetOutput).toHaveBeenCalledWith("api-request-count", 5);
+    expect(mockSetOutput).toHaveBeenCalledWith("api-error-count", 0);
+    expect(mockSetOutput).toHaveBeenCalledWith("api-retry-count", 0);
+    expect(mockSetOutput).toHaveBeenCalledWith("pages-fetched", 1);
+    expect(mockSetOutput).toHaveBeenCalledWith("rule-fetch-success-rate", 100);
+    expect(mockSetOutput).toHaveBeenCalledWith("sarif-file-size-bytes", 2048);
+    expect(mockSetOutput).toHaveBeenCalledWith(
+      "processing-time-ms",
+      expect.any(Number),
+    );
   });
 });

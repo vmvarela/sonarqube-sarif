@@ -15,6 +15,23 @@ export interface ConversionStats {
   filtered: number;
 }
 
+export interface ProcessingMetrics {
+  /** Total HTTP requests made (including retries) */
+  apiRequestCount: number;
+  /** Total failed requests before retry succeeded or gave up */
+  apiErrorCount: number;
+  /** Total retry attempts across all requests */
+  apiRetryCount: number;
+  /** Total pagination pages retrieved */
+  pagesFetched: number;
+  /** Percentage of rule details successfully fetched (0–100) */
+  ruleFetchSuccessRate: number;
+  /** Size of the generated SARIF file in bytes */
+  sarifFileSizeBytes: number;
+  /** Total action duration in milliseconds */
+  processingTimeMs: number;
+}
+
 /**
  * Calculate statistics from SonarQube response
  */
@@ -133,4 +150,22 @@ export function setStatsOutputs(stats: ConversionStats): void {
   core.setOutput("vulnerabilities-count", stats.byType.VULNERABILITY ?? 0);
   core.setOutput("code-smells-count", stats.byType.CODE_SMELL ?? 0);
   core.setOutput("hotspots-count", stats.byType.SECURITY_HOTSPOT ?? 0);
+}
+
+/**
+ * Set action outputs for processing metrics
+ */
+export function setMetricsOutputs(metrics: ProcessingMetrics): void {
+  const core = coreModule;
+
+  core.setOutput("api-request-count", metrics.apiRequestCount);
+  core.setOutput("api-error-count", metrics.apiErrorCount);
+  core.setOutput("api-retry-count", metrics.apiRetryCount);
+  core.setOutput("pages-fetched", metrics.pagesFetched);
+  core.setOutput(
+    "rule-fetch-success-rate",
+    Math.round(metrics.ruleFetchSuccessRate),
+  );
+  core.setOutput("sarif-file-size-bytes", metrics.sarifFileSizeBytes);
+  core.setOutput("processing-time-ms", metrics.processingTimeMs);
 }

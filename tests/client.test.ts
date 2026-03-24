@@ -12,13 +12,55 @@ vi.mock("@actions/core", () => ({
 const axiosMocks = {
   get: vi.fn(),
   create: vi.fn(),
+  requestInterceptorFn: null as ((config: unknown) => unknown) | null,
+  responseInterceptorOnFulfilled: null as ((res: unknown) => unknown) | null,
+  responseInterceptorOnRejected: null as ((err: unknown) => unknown) | null,
 };
 
 vi.mock("axios", () => ({
   default: {
     create: (...args: unknown[]) => {
       axiosMocks.create(...args);
-      return { get: axiosMocks.get };
+
+      // Instrumented get: runs request interceptor before the mock, and
+      // response interceptors after — mirrors real axios behaviour.
+      const instrumentedGet = async (...getArgs: unknown[]) => {
+        // Run request interceptor if registered
+        if (axiosMocks.requestInterceptorFn) {
+          axiosMocks.requestInterceptorFn(getArgs[0]);
+        }
+        try {
+          const result = await axiosMocks.get(...getArgs);
+          return axiosMocks.responseInterceptorOnFulfilled
+            ? axiosMocks.responseInterceptorOnFulfilled(result)
+            : result;
+        } catch (err) {
+          if (axiosMocks.responseInterceptorOnRejected) {
+            return axiosMocks.responseInterceptorOnRejected(err);
+          }
+          throw err;
+        }
+      };
+
+      return {
+        get: instrumentedGet,
+        interceptors: {
+          request: {
+            use: (fn: (config: unknown) => unknown) => {
+              axiosMocks.requestInterceptorFn = fn;
+            },
+          },
+          response: {
+            use: (
+              onFulfilled: (res: unknown) => unknown,
+              onRejected: (err: unknown) => unknown,
+            ) => {
+              axiosMocks.responseInterceptorOnFulfilled = onFulfilled;
+              axiosMocks.responseInterceptorOnRejected = onRejected;
+            },
+          },
+        },
+      };
     },
     isAxiosError: (error: unknown) =>
       (error as { isAxiosError?: boolean })?.isAxiosError === true,
@@ -75,6 +117,13 @@ describe("SonarQubeClient", () => {
         },
         timeout: 30000,
       });
+    });
+
+    it("registers request and response interceptors", () => {
+      new SonarQubeClient(mockConfig);
+      expect(axiosMocks.requestInterceptorFn).toBeTypeOf("function");
+      expect(axiosMocks.responseInterceptorOnFulfilled).toBeTypeOf("function");
+      expect(axiosMocks.responseInterceptorOnRejected).toBeTypeOf("function");
     });
   });
 
@@ -1018,6 +1067,226 @@ describe("SonarQubeClient", () => {
       expect(core.warning).toHaveBeenCalledWith(
         expect.stringContaining("ECONNRESET"),
       );
+    });
+  });
+
+  describe("getMetrics", () => {
+    const singleIssueResponse = {
+      data: {
+        paging: { total: 1 },
+        issues: [
+          {
+            key: "issue-1",
+            rule: "ts:S1234",
+            severity: "MAJOR",
+            component: "project:src/a.ts",
+            project: "project",
+            message: "Issue 1",
+            status: "OPEN",
+            type: "BUG",
+          },
+        ],
+        components: [
+          { key: "project:src/a.ts", name: "a.ts", qualifier: "FIL" },
+        ],
+        rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
+      },
+    };
+
+    it("returns zero counts before any requests", () => {
+      const client = new SonarQubeClient(mockConfig);
+      const metrics = client.getMetrics();
+
+      expect(metrics.apiRequestCount).toBe(0);
+      expect(metrics.apiErrorCount).toBe(0);
+      expect(metrics.apiRetryCount).toBe(0);
+      expect(metrics.pagesFetched).toBe(0);
+      expect(metrics.ruleFetchSuccessRate).toBe(100);
+    });
+
+    it("counts a successful single-page fetch as 1 request and 1 page", async () => {
+      axiosMocks.get.mockResolvedValueOnce(singleIssueResponse);
+
+      const client = new SonarQubeClient(mockConfig);
+      await client.fetchAllIssues();
+      const metrics = client.getMetrics();
+
+      expect(metrics.apiRequestCount).toBe(1);
+      expect(metrics.apiErrorCount).toBe(0);
+      expect(metrics.apiRetryCount).toBe(0);
+      expect(metrics.pagesFetched).toBe(1);
+    });
+
+    it("counts pages fetched for multi-page response", async () => {
+      // Page 1
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          paging: { total: 2 },
+          issues: [
+            {
+              key: "issue-1",
+              rule: "ts:S1234",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
+          ],
+          components: [
+            { key: "project:src/a.ts", name: "a.ts", qualifier: "FIL" },
+          ],
+          rules: [{ key: "ts:S1234", name: "Rule 1234", status: "READY" }],
+        },
+      });
+      // Page 2
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          paging: { total: 2 },
+          issues: [
+            {
+              key: "issue-2",
+              rule: "ts:S1234",
+              severity: "MINOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 2",
+              status: "OPEN",
+              type: "CODE_SMELL",
+            },
+          ],
+          components: [
+            { key: "project:src/a.ts", name: "a.ts", qualifier: "FIL" },
+          ],
+          rules: [],
+        },
+      });
+
+      const client = new SonarQubeClient(mockConfig);
+      await client.fetchAllIssues();
+      const metrics = client.getMetrics();
+
+      expect(metrics.pagesFetched).toBe(2);
+      expect(metrics.apiRequestCount).toBe(2);
+    });
+
+    it("counts retry attempts and HTTP errors", async () => {
+      const serverError = {
+        isAxiosError: true,
+        response: { status: 503, data: {} },
+        message: "Service Unavailable",
+      };
+      axiosMocks.get.mockRejectedValueOnce(serverError);
+      axiosMocks.get.mockResolvedValueOnce(singleIssueResponse);
+
+      const client = new SonarQubeClient(mockConfig);
+      const promise = client.fetchAllIssues();
+      await vi.advanceTimersByTimeAsync(2000);
+      await promise;
+
+      const metrics = client.getMetrics();
+      // 2 total requests (1 failed + 1 success)
+      expect(metrics.apiRequestCount).toBe(2);
+      // 1 HTTP error before retry
+      expect(metrics.apiErrorCount).toBe(1);
+      // 1 retry attempt
+      expect(metrics.apiRetryCount).toBe(1);
+    });
+
+    it("reports 100% rule fetch success rate when all rules succeed", async () => {
+      // Response with a missing rule
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          paging: { total: 1 },
+          issues: [
+            {
+              key: "issue-1",
+              rule: "ts:S9999",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
+          ],
+          components: [
+            { key: "project:src/a.ts", name: "a.ts", qualifier: "FIL" },
+          ],
+          rules: [],
+        },
+      });
+      // Rule detail fetch succeeds
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          rule: {
+            key: "ts:S9999",
+            name: "Missing Rule",
+            status: "READY",
+            severity: "MAJOR",
+            type: "BUG",
+          },
+        },
+      });
+
+      const client = new SonarQubeClient(mockConfig);
+      await client.fetchAllIssues();
+      const metrics = client.getMetrics();
+
+      expect(metrics.ruleFetchSuccessRate).toBe(100);
+    });
+
+    it("reports partial rule fetch success rate when some rule fetches fail", async () => {
+      // Two missing rules
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          paging: { total: 1 },
+          issues: [
+            {
+              key: "issue-1",
+              rule: "ts:S1111",
+              severity: "MAJOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 1",
+              status: "OPEN",
+              type: "BUG",
+            },
+            {
+              key: "issue-2",
+              rule: "ts:S2222",
+              severity: "MINOR",
+              component: "project:src/a.ts",
+              project: "project",
+              message: "Issue 2",
+              status: "OPEN",
+              type: "CODE_SMELL",
+            },
+          ],
+          components: [
+            { key: "project:src/a.ts", name: "a.ts", qualifier: "FIL" },
+          ],
+          rules: [],
+        },
+      });
+      // First rule succeeds, second fails
+      axiosMocks.get.mockResolvedValueOnce({
+        data: {
+          rule: {
+            key: "ts:S1111",
+            name: "Rule 1111",
+            status: "READY",
+          },
+        },
+      });
+      axiosMocks.get.mockRejectedValueOnce(new Error("Network error"));
+
+      const client = new SonarQubeClient(mockConfig);
+      await client.fetchAllIssues();
+      const metrics = client.getMetrics();
+
+      expect(metrics.ruleFetchSuccessRate).toBe(50);
     });
   });
 });
