@@ -273,7 +273,9 @@ export class SonarQubeClient {
 
         page++;
       } catch (error) {
-        throw this.handleError(error, "fetching issues");
+        throw error instanceof SonarQubeError
+          ? error
+          : this.handleError(error, "fetching issues");
       }
     }
 
@@ -529,7 +531,7 @@ export class SonarQubeClient {
         attempt++;
 
         if (!isRetryableError(error) || attempt > MAX_RETRIES) {
-          throw error;
+          throw this.handleError(error, context);
         }
 
         // Determine how long to wait before the next attempt

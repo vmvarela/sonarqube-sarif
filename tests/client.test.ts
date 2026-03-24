@@ -789,11 +789,12 @@ describe("SonarQubeClient", () => {
 
       const client = new SonarQubeClient(mockConfig);
       const promise = client.fetchAllIssues();
+      const expectation = expect(promise).rejects.toThrow(SonarQubeError);
 
       // Advance through all retry delays: 1s + 2s + 4s = 7s
       await vi.advanceTimersByTimeAsync(10000);
 
-      await expect(promise).rejects.toThrow(SonarQubeError);
+      await expectation;
     });
 
     it("handles generic errors", async () => {
@@ -988,11 +989,12 @@ describe("SonarQubeClient", () => {
 
       const client = new SonarQubeClient(mockConfig);
       const promise = client.fetchAllIssues();
+      const expectation = expect(promise).rejects.toThrow();
 
       // Advance through all retry delays: 1s + 2s + 4s = 7s (plus jitter overhead)
       await vi.advanceTimersByTimeAsync(10000);
 
-      await expect(promise).rejects.toThrow();
+      await expectation;
       expect(axiosMocks.get).toHaveBeenCalledTimes(4); // 1 + 3 retries
       expect(core.warning).toHaveBeenCalledTimes(3); // one warning per retry
     });
