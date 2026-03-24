@@ -274,6 +274,37 @@ describe("config", () => {
 
       expect(config.minSeverity).toBe("INFO");
     });
+
+    it("parses skip-preflight as true when set", () => {
+      vi.mocked(core.getInput).mockImplementation((name: string) => {
+        const inputs: Record<string, string> = {
+          "sonar-host-url": "https://sonar.example.com",
+          "sonar-token": "secret-token",
+          "project-key": "my-project",
+          "skip-preflight": "true",
+        };
+        return inputs[name] || "";
+      });
+
+      const config = parseConfig();
+
+      expect(config.skipPreflight).toBe(true);
+    });
+
+    it("defaults skip-preflight to false when not set", () => {
+      vi.mocked(core.getInput).mockImplementation((name: string) => {
+        const inputs: Record<string, string> = {
+          "sonar-host-url": "https://sonar.example.com",
+          "sonar-token": "secret-token",
+          "project-key": "my-project",
+        };
+        return inputs[name] || "";
+      });
+
+      const config = parseConfig();
+
+      expect(config.skipPreflight).toBe(false);
+    });
   });
 
   describe("maskSecrets", () => {

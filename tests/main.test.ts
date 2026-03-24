@@ -282,4 +282,26 @@ describe("main — fail-on-severity (issue #11)", () => {
       expect.any(Number),
     );
   });
+
+  it("(g) calls validateConfig when skipPreflight is false", async () => {
+    mockParseConfig.mockReturnValue({ ...baseConfig, skipPreflight: false });
+    mockFetchAllIssues.mockResolvedValue(responseEmpty);
+
+    const preflight = await import("../src/preflight");
+    const { run } = await import("../src/main");
+    await run();
+
+    expect(vi.mocked(preflight.validateConfig)).toHaveBeenCalledTimes(1);
+  });
+
+  it("(h) skips validateConfig when skipPreflight is true", async () => {
+    mockParseConfig.mockReturnValue({ ...baseConfig, skipPreflight: true });
+    mockFetchAllIssues.mockResolvedValue(responseEmpty);
+
+    const preflight = await import("../src/preflight");
+    const { run } = await import("../src/main");
+    await run();
+
+    expect(vi.mocked(preflight.validateConfig)).not.toHaveBeenCalled();
+  });
 });
