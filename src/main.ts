@@ -11,7 +11,9 @@ import {
   filterBySeverity,
   formatStatsForLog,
   setStatsOutputs,
+  setMetricsOutputs,
   ConversionStats,
+  ProcessingMetrics,
 } from "./stats";
 import { writePrComment } from "./pr-comment";
 import { createCheckRun, shouldFailCheck } from "./github-checks";
@@ -27,6 +29,8 @@ import {
 
 export async function run(): Promise<void> {
   try {
+    const startTimeMs = Date.now();
+
     // Parse and validate configuration
     const config = parseConfig();
     maskSecrets(config);
@@ -106,12 +110,24 @@ export async function run(): Promise<void> {
     // Write output file
     writeOutput(config.outputFile, sarif);
 
+    // Collect SARIF file size after write
+    const sarifFileSizeBytes = getSarifFileSize(config.outputFile);
+
     // Set outputs
     core.setOutput("sarif-file", config.outputFile);
     setStatsOutputs(stats);
 
+    // Collect and set processing metrics
+    const processingTimeMs = Date.now() - startTimeMs;
+    const metrics: ProcessingMetrics = {
+      ...client.getMetrics(),
+      sarifFileSizeBytes,
+      processingTimeMs,
+    };
+    setMetricsOutputs(metrics);
+
     // Write job summary
-    await writeSummary(config, stats);
+    await writeSummary(config, stats, metrics);
 
     // Create GitHub Check Run with annotations
     await createCheckRun({
@@ -209,6 +225,14 @@ function writeOutput(outputFile: string, sarif: object): void {
   fs.writeFileSync(outputFile, JSON.stringify(sarif, null, 2), "utf-8");
 }
 
+function getSarifFileSize(outputFile: string): number {
+  try {
+    return fs.statSync(outputFile).size;
+  } catch {
+    return 0;
+  }
+}
+
 function printSuccess(): void {
   const divider = "═".repeat(60);
   core.info(divider);
@@ -219,6 +243,7 @@ function printSuccess(): void {
 async function writeSummary(
   config: ActionConfig,
   stats: ConversionStats,
+  metrics: ProcessingMetrics,
 ): Promise<void> {
   const severityRows = Object.entries(stats.bySeverity)
     .filter(([_, count]) => count > 0)
@@ -227,6 +252,9 @@ async function writeSummary(
   const typeRows = Object.entries(stats.byType)
     .filter(([_, count]) => count > 0)
     .map(([type, count]) => [type, count.toString()]);
+
+  const sarifSizeKb = (metrics.sarifFileSizeBytes / 1024).toFixed(1);
+  const processingTimeSec = (metrics.processingTimeMs / 1000).toFixed(1);
 
   await core.summary
     .addHeading("🔍 SonarQube to SARIF Conversion", 2)
@@ -255,6 +283,23 @@ async function writeSummary(
         { data: "Count", header: true },
       ],
       ...typeRows,
+    ])
+    .addHeading("Pipeline Metrics", 3)
+    .addTable([
+      [
+        { data: "Metric", header: true },
+        { data: "Value", header: true },
+      ],
+      ["API Requests", metrics.apiRequestCount.toString()],
+      ["API Errors (pre-retry)", metrics.apiErrorCount.toString()],
+      ["Retry Attempts", metrics.apiRetryCount.toString()],
+      ["Pages Fetched", metrics.pagesFetched.toString()],
+      [
+        "Rule Fetch Success Rate",
+        `${Math.round(metrics.ruleFetchSuccessRate)}%`,
+      ],
+      ["SARIF File Size", `${sarifSizeKb} KB`],
+      ["Processing Time", `${processingTimeSec}s`],
     ])
     .write();
 }

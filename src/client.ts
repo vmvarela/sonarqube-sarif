@@ -8,6 +8,7 @@ import {
   createConnectionError,
   createValidationError,
 } from "./errors";
+import { ProcessingMetrics } from "./stats";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -185,6 +186,14 @@ export class SonarQubeClient {
   private readonly projectKey: string;
   private readonly config: ActionConfig;
 
+  // ── Internal metric counters ────────────────────────────────────────────────
+  private _apiRequestCount = 0;
+  private _apiErrorCount = 0;
+  private _apiRetryCount = 0;
+  private _pagesFetched = 0;
+  private _rulesFetchedTotal = 0;
+  private _rulesFetchedSuccess = 0;
+
   constructor(config: ActionConfig) {
     this.projectKey = config.projectKey;
     this.config = config;
@@ -201,6 +210,22 @@ export class SonarQubeClient {
       },
       timeout: 30000, // 30 second timeout
     });
+
+    // ── Axios interceptors for metric collection ──────────────────────────────
+    this.client.interceptors.request.use((reqConfig) => {
+      this._apiRequestCount++;
+      return reqConfig;
+    });
+
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (axios.isAxiosError(error) && error.response) {
+          this._apiErrorCount++;
+        }
+        return Promise.reject(error);
+      },
+    );
   }
 
   /**
@@ -242,6 +267,7 @@ export class SonarQubeClient {
           `fetching issues page ${page}`,
         );
         const normalized = normalizeIssuesResponse(response.data);
+        this._pagesFetched++;
 
         if (page === 1) {
           if (normalized.pagingTotal !== undefined) {
@@ -432,6 +458,8 @@ export class SonarQubeClient {
     const BATCH_SIZE = 5;
     let failedCount = 0;
 
+    this._rulesFetchedTotal = ruleKeys.length;
+
     for (let i = 0; i < ruleKeys.length; i += BATCH_SIZE) {
       const batch = ruleKeys.slice(i, i + BATCH_SIZE);
 
@@ -459,6 +487,7 @@ export class SonarQubeClient {
                 severity: rule.severity,
                 type: rule.type,
               });
+              this._rulesFetchedSuccess++;
             }
           } catch (error) {
             failedCount++;
@@ -554,6 +583,7 @@ export class SonarQubeClient {
           `Retry ${attempt}/${MAX_RETRIES} for "${context}" after ${delayMs}ms (reason: ${reason})`,
         );
 
+        this._apiRetryCount++;
         await sleep(delayMs);
       }
     }
@@ -597,5 +627,28 @@ export class SonarQubeClient {
       undefined,
       error,
     );
+  }
+
+  /**
+   * Return a snapshot of the HTTP and pipeline metrics collected so far.
+   * `sarifFileSizeBytes` and `processingTimeMs` are set by the caller (main.ts)
+   * since those values are not available inside the client.
+   */
+  getMetrics(): Omit<
+    ProcessingMetrics,
+    "sarifFileSizeBytes" | "processingTimeMs"
+  > {
+    const ruleFetchSuccessRate =
+      this._rulesFetchedTotal === 0
+        ? 100
+        : (this._rulesFetchedSuccess / this._rulesFetchedTotal) * 100;
+
+    return {
+      apiRequestCount: this._apiRequestCount,
+      apiErrorCount: this._apiErrorCount,
+      apiRetryCount: this._apiRetryCount,
+      pagesFetched: this._pagesFetched,
+      ruleFetchSuccessRate,
+    };
   }
 }

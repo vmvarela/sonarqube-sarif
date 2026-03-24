@@ -86,6 +86,20 @@ outputs:
     description: "Number of CODE_SMELL type issues"
   hotspots-count:
     description: "Number of SECURITY_HOTSPOT type issues"
+  api-request-count:
+    description: "Total HTTP requests made to SonarQube API"
+  api-error-count:
+    description: "Total failed requests (before retry)"
+  api-retry-count:
+    description: "Total retry attempts across all requests"
+  pages-fetched:
+    description: "Total pagination pages retrieved from SonarQube"
+  rule-fetch-success-rate:
+    description: "Percentage of rule details successfully fetched (0-100)"
+  sarif-file-size-bytes:
+    description: "Size of the generated SARIF file in bytes"
+  processing-time-ms:
+    description: "Total action duration in milliseconds"
 
 runs:
   using: "node24"
