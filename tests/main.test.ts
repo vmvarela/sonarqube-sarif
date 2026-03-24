@@ -87,6 +87,10 @@ vi.mock("../src/pr-comment", () => ({
   writePrComment: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../src/preflight", () => ({
+  validateConfig: vi.fn().mockResolvedValue(undefined),
+}));
+
 const mockCreateCheck = vi.fn();
 vi.mock("../src/github-checks", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/github-checks")>();
@@ -119,6 +123,7 @@ const baseConfig: ActionConfig = {
   processingDelay: 0,
   includeResolved: false,
   prComment: false,
+  skipPreflight: true, // Skip pre-flight in unit tests
 };
 
 const responseWithCritical: SonarQubeSearchResponse = {

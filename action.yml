@@ -58,6 +58,10 @@ inputs:
     description: "GitHub token for PR comments and check runs (defaults to github.token)"
     required: false
     default: ${{ github.token }}
+  skip-preflight:
+    description: "Skip pre-flight validation checks (connectivity, token, project key). Use for offline/air-gapped setups."
+    required: false
+    default: "false"
 
 outputs:
   sarif-file:

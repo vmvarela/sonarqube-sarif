@@ -6,6 +6,7 @@ import { parseConfig, maskSecrets, ConfigError, ActionConfig } from "./config";
 import { SonarQubeClient } from "./client";
 import { SarifConverter } from "./sarif-converter";
 import { SonarQubeError } from "./errors";
+import { validateConfig } from "./preflight";
 import {
   calculateStats,
   filterBySeverity,
@@ -36,6 +37,11 @@ export async function run(): Promise<void> {
     maskSecrets(config);
 
     maybeWarnAboutProjectKey(config);
+
+    // Run pre-flight checks (connectivity, token, project key)
+    if (!config.skipPreflight) {
+      await validateConfig(config);
+    }
 
     // Print banner
     printBanner(config);

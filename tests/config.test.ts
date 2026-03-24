@@ -16,7 +16,7 @@ vi.mock("@actions/core", () => ({
 vi.mock("@actions/github", () => ({
   context: {
     repo: { repo: "test-repo", owner: "test-owner" },
-    payload: { 
+    payload: {
       repository: { name: "test-repo" },
       pull_request: { number: 123 },
     },
@@ -134,9 +134,7 @@ describe("config", () => {
       });
 
       expect(() => parseConfig()).toThrow(ConfigError);
-      expect(() => parseConfig()).toThrow(
-        "sonar-host-url must be a valid URL",
-      );
+      expect(() => parseConfig()).toThrow("sonar-host-url must be a valid URL");
     });
 
     it("throws ConfigError for empty sonar-token", () => {
@@ -293,6 +291,8 @@ describe("config", () => {
         processingDelay: 0,
         minSeverity: "INFO" as const,
         includeResolved: false,
+        prComment: false,
+        skipPreflight: false,
       };
 
       maskSecrets(config);
@@ -314,6 +314,8 @@ describe("config", () => {
         processingDelay: 0,
         minSeverity: "INFO" as const,
         includeResolved: false,
+        prComment: false,
+        skipPreflight: false,
       };
 
       maskSecrets(config);

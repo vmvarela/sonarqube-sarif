@@ -23,6 +23,7 @@ export interface ActionConfig {
   prComment: boolean;
   failOnSeverity?: SeverityLevel;
   githubToken?: string;
+  skipPreflight: boolean;
 }
 
 export type SeverityLevel = "INFO" | "MINOR" | "MAJOR" | "CRITICAL" | "BLOCKER";
@@ -165,6 +166,7 @@ export function parseConfig(): ActionConfig {
       emptyToUndefined(core.getInput("github-token")) ??
       process.env.GITHUB_TOKEN ??
       undefined,
+    skipPreflight: core.getInput("skip-preflight") === "true",
   };
 }
 

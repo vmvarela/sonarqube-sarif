@@ -90,6 +90,7 @@ describe("SonarQubeClient", () => {
     prComment: false,
     failOnSeverity: undefined,
     githubToken: undefined,
+    skipPreflight: false,
   };
 
   beforeEach(() => {
