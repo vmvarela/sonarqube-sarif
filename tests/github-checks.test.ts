@@ -81,6 +81,7 @@ describe("github-checks", () => {
     includeResolved: false,
     prComment: true,
     githubToken: "test-token",
+    skipPreflight: false,
   };
 
   const mockIssues: SonarQubeIssue[] = [

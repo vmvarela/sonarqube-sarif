@@ -77,6 +77,7 @@ describe("pr-comment", () => {
     prComment: true,
     failOnSeverity: undefined,
     githubToken: "test-token",
+    skipPreflight: false,
   };
 
   beforeEach(() => {

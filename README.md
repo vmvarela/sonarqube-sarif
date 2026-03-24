@@ -105,25 +105,29 @@ These are the knobs most teams end up using:
 | `pr-comment`          | auto-enabled in PRs | Silence the PR comment if you only want the Check Run.           |
 | `include-resolved`    | `false`             | Include resolved issues in the SARIF output.                     |
 | `output-file`         | `sonarqube.sarif`   | Write the SARIF file somewhere else.                             |
+| `skip-preflight`      | `false`             | Disable startup validation for offline or air-gapped setups.     |
+
+> **Note on `processing-delay`:** the delay is applied in both modes — as a standalone wait when `wait-for-processing: false`, and also at the start of the polling loop when `wait-for-processing: true`. This lets you insert a fixed warm-up period even when polling is enabled.
 
 ## Full input reference
 
-| Input                 | Default           | Notes                                                            |
-| --------------------- | ----------------- | ---------------------------------------------------------------- |
-| `sonar-host-url`      | —                 | Required. Must be `http://` or `https://`.                       |
-| `sonar-token`         | —                 | Required. Needs SonarQube Browse permission.                     |
-| `project-key`         | repo name         | Falls back to the GitHub repository name.                        |
-| `output-file`         | `sonarqube.sarif` | Directories are created if needed.                               |
-| `branch`              | unset             | Pass explicitly when you need a branch-specific SonarQube query. |
-| `wait-for-processing` | `true`            | Polls SonarQube until analysis completes or times out.           |
-| `max-wait-time`       | `300`             | Timeout, in seconds, for polling.                                |
-| `polling-interval`    | `10`              | Interval, in seconds, between polling attempts.                  |
-| `processing-delay`    | `0`               | Fixed delay before fetching issues; max `600`.                   |
-| `min-severity`        | `INFO`            | One of `INFO`, `MINOR`, `MAJOR`, `CRITICAL`, `BLOCKER`.          |
-| `include-resolved`    | `false`           | Includes resolved issues in the fetched dataset.                 |
-| `pr-comment`          | PRs only          | If omitted, comments are enabled only in PR context.             |
-| `fail-on-severity`    | unset             | Fails the Check Run when issues at or above the threshold exist. |
-| `github-token`        | `github.token`    | Used for Check Runs, PR comments, and PR file lookup.            |
+| Input                 | Default           | Notes                                                                                                                                |
+| --------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `sonar-host-url`      | —                 | Required. Must be `http://` or `https://`.                                                                                           |
+| `sonar-token`         | —                 | Required. Needs SonarQube Browse permission.                                                                                         |
+| `project-key`         | repo name         | Falls back to the GitHub repository name.                                                                                            |
+| `output-file`         | `sonarqube.sarif` | Directories are created if needed.                                                                                                   |
+| `branch`              | unset             | Pass explicitly when you need a branch-specific SonarQube query.                                                                     |
+| `wait-for-processing` | `true`            | Polls SonarQube until analysis completes or times out.                                                                               |
+| `max-wait-time`       | `300`             | Timeout, in seconds, for polling.                                                                                                    |
+| `polling-interval`    | `10`              | Interval, in seconds, between polling attempts.                                                                                      |
+| `processing-delay`    | `0`               | Fixed delay (seconds, max `600`) applied before fetching issues. Also runs before the polling loop when `wait-for-processing: true`. |
+| `min-severity`        | `INFO`            | One of `INFO`, `MINOR`, `MAJOR`, `CRITICAL`, `BLOCKER`.                                                                              |
+| `include-resolved`    | `false`           | Includes resolved issues in the fetched dataset.                                                                                     |
+| `pr-comment`          | auto              | Enabled automatically when running in a PR context; set explicitly to `true` or `false` to override.                                 |
+| `fail-on-severity`    | unset             | Fails the Check Run when issues at or above the threshold exist.                                                                     |
+| `github-token`        | `github.token`    | Used for Check Runs, PR comments, and PR file lookup.                                                                                |
+| `skip-preflight`      | `false`           | Skip startup checks (URL reachability, token, project key).                                                                          |
 
 ## Real examples
 
@@ -169,6 +173,16 @@ If the PR comment becomes noise, keep the Check Run and disable the comment.
     pr-comment: false
 ```
 
+For air-gapped setups or environments where the SonarQube host is not reachable from the runner at startup, skip the pre-flight checks.
+
+```yaml
+- uses: vmvarela/sonarqube-sarif@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    skip-preflight: true
+```
+
 ## Outputs
 
 The action always emits the SARIF path plus counts you can reuse in later workflow steps.
@@ -181,6 +195,11 @@ The action always emits the SARIF path plus counts you can reuse in later workfl
 | `components-count`                                                                | Files/components referenced by remaining issues |
 | `blocker-count` / `critical-count` / `major-count` / `minor-count` / `info-count` | Severity counts                                 |
 | `bugs-count` / `vulnerabilities-count` / `code-smells-count` / `hotspots-count`   | Type counts                                     |
+| `api-request-count` / `api-error-count` / `api-retry-count`                       | HTTP request metrics                            |
+| `pages-fetched`                                                                   | Pagination pages retrieved from SonarQube       |
+| `rule-fetch-success-rate`                                                         | Percentage of rule details successfully fetched |
+| `sarif-file-size-bytes`                                                           | Size of the generated SARIF file in bytes       |
+| `processing-time-ms`                                                              | Total action duration in milliseconds           |
 
 This is a typical follow-up step:
 
@@ -207,7 +226,7 @@ On the SonarQube side, **Browse** is required. **Execute Analysis** is only need
 ## Limitations
 
 - **PR filtering depends on changed-file lookup.** If GitHub file lookup fails, the action falls back to the full issue set.
-- **Check annotations are capped at 50.** That is a GitHub Check Run limit, not a project limit.
+- **Check annotations are capped at 50.** That is a GitHub Check Run limit, not a project limit. Issues are sorted by severity before the cap is applied, so the most critical findings always survive.
 - **The action does not evaluate SonarQube Quality Gates.** `fail-on-severity` is a separate, issue-based gate.
 - **Community Edition has no branch or PR analysis.** On CE, SonarQube analyzes the project as a whole; this action filters the result to changed files as a best-effort approximation.
 

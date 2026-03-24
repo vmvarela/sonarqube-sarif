@@ -87,6 +87,10 @@ vi.mock("../src/pr-comment", () => ({
   writePrComment: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../src/preflight", () => ({
+  validateConfig: vi.fn().mockResolvedValue(undefined),
+}));
+
 const mockCreateCheck = vi.fn();
 vi.mock("../src/github-checks", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/github-checks")>();
@@ -119,6 +123,7 @@ const baseConfig: ActionConfig = {
   processingDelay: 0,
   includeResolved: false,
   prComment: false,
+  skipPreflight: true, // Skip pre-flight in unit tests
 };
 
 const responseWithCritical: SonarQubeSearchResponse = {
@@ -276,5 +281,27 @@ describe("main — fail-on-severity (issue #11)", () => {
       "processing-time-ms",
       expect.any(Number),
     );
+  });
+
+  it("(g) calls validateConfig when skipPreflight is false", async () => {
+    mockParseConfig.mockReturnValue({ ...baseConfig, skipPreflight: false });
+    mockFetchAllIssues.mockResolvedValue(responseEmpty);
+
+    const preflight = await import("../src/preflight");
+    const { run } = await import("../src/main");
+    await run();
+
+    expect(vi.mocked(preflight.validateConfig)).toHaveBeenCalledTimes(1);
+  });
+
+  it("(h) skips validateConfig when skipPreflight is true", async () => {
+    mockParseConfig.mockReturnValue({ ...baseConfig, skipPreflight: true });
+    mockFetchAllIssues.mockResolvedValue(responseEmpty);
+
+    const preflight = await import("../src/preflight");
+    const { run } = await import("../src/main");
+    await run();
+
+    expect(vi.mocked(preflight.validateConfig)).not.toHaveBeenCalled();
   });
 });

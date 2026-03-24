@@ -16,7 +16,7 @@ vi.mock("@actions/core", () => ({
 vi.mock("@actions/github", () => ({
   context: {
     repo: { repo: "test-repo", owner: "test-owner" },
-    payload: { 
+    payload: {
       repository: { name: "test-repo" },
       pull_request: { number: 123 },
     },
@@ -134,9 +134,7 @@ describe("config", () => {
       });
 
       expect(() => parseConfig()).toThrow(ConfigError);
-      expect(() => parseConfig()).toThrow(
-        "sonar-host-url must be a valid URL",
-      );
+      expect(() => parseConfig()).toThrow("sonar-host-url must be a valid URL");
     });
 
     it("throws ConfigError for empty sonar-token", () => {
@@ -276,6 +274,37 @@ describe("config", () => {
 
       expect(config.minSeverity).toBe("INFO");
     });
+
+    it("parses skip-preflight as true when set", () => {
+      vi.mocked(core.getInput).mockImplementation((name: string) => {
+        const inputs: Record<string, string> = {
+          "sonar-host-url": "https://sonar.example.com",
+          "sonar-token": "secret-token",
+          "project-key": "my-project",
+          "skip-preflight": "true",
+        };
+        return inputs[name] || "";
+      });
+
+      const config = parseConfig();
+
+      expect(config.skipPreflight).toBe(true);
+    });
+
+    it("defaults skip-preflight to false when not set", () => {
+      vi.mocked(core.getInput).mockImplementation((name: string) => {
+        const inputs: Record<string, string> = {
+          "sonar-host-url": "https://sonar.example.com",
+          "sonar-token": "secret-token",
+          "project-key": "my-project",
+        };
+        return inputs[name] || "";
+      });
+
+      const config = parseConfig();
+
+      expect(config.skipPreflight).toBe(false);
+    });
   });
 
   describe("maskSecrets", () => {
@@ -293,6 +322,8 @@ describe("config", () => {
         processingDelay: 0,
         minSeverity: "INFO" as const,
         includeResolved: false,
+        prComment: false,
+        skipPreflight: false,
       };
 
       maskSecrets(config);
@@ -314,6 +345,8 @@ describe("config", () => {
         processingDelay: 0,
         minSeverity: "INFO" as const,
         includeResolved: false,
+        prComment: false,
+        skipPreflight: false,
       };
 
       maskSecrets(config);
