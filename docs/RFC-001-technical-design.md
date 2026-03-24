@@ -55,9 +55,10 @@ flowchart TD
     K --> M[Keep issues in changed files]
     M --> L
     L --> N[Write SARIF file]
-    N --> O[Set outputs and job summary]
-    O --> P[Create Check Run]
-    P --> Q[Optional PR comment]
+    N --> O[Collect metrics and set outputs]
+    O --> P[Write job summary]
+    P --> Q[Create Check Run]
+    Q --> R[Optional PR comment]
 ```
 
 ## Modules
@@ -165,7 +166,8 @@ This split is deliberate. Fetching from SonarQube is core behavior; PR comments 
 
 - The SonarQube search API is paginated, so large projects pay a predictable multi-request cost.
 - Rule details may require follow-up requests when the issue payload does not include everything needed for SARIF.
-- GitHub caps annotations at 50 per Check Run.
+- GitHub caps annotations at 50 per Check Run. Issues are sorted by severity (BLOCKER → INFO) before the cap is applied, so the most critical findings always make it in.
+- `processing-delay` runs at the start of `waitForProcessing()` as well as when polling is disabled, so it is always applied if non-zero.
 - The action prefers completeness over speed: it fetches the full issue set and then filters it.
 - There is no incremental baseline mode yet.
 
