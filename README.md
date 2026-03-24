@@ -105,6 +105,7 @@ These are the knobs most teams end up using:
 | `pr-comment`          | auto-enabled in PRs | Silence the PR comment if you only want the Check Run.           |
 | `include-resolved`    | `false`             | Include resolved issues in the SARIF output.                     |
 | `output-file`         | `sonarqube.sarif`   | Write the SARIF file somewhere else.                             |
+| `skip-preflight`      | `false`             | Disable startup validation for offline or air-gapped setups.     |
 
 ## Full input reference
 
@@ -124,6 +125,7 @@ These are the knobs most teams end up using:
 | `pr-comment`          | PRs only          | If omitted, comments are enabled only in PR context.             |
 | `fail-on-severity`    | unset             | Fails the Check Run when issues at or above the threshold exist. |
 | `github-token`        | `github.token`    | Used for Check Runs, PR comments, and PR file lookup.            |
+| `skip-preflight`      | `false`           | Skip startup checks (URL reachability, token, project key).      |
 
 ## Real examples
 
@@ -167,6 +169,16 @@ If the PR comment becomes noise, keep the Check Run and disable the comment.
     sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
     sonar-token: ${{ secrets.SONAR_TOKEN }}
     pr-comment: false
+```
+
+For air-gapped setups or environments where the SonarQube host is not reachable from the runner at startup, skip the pre-flight checks.
+
+```yaml
+- uses: vmvarela/sonarqube-sarif@v1
+  with:
+    sonar-host-url: ${{ secrets.SONAR_HOST_URL }}
+    sonar-token: ${{ secrets.SONAR_TOKEN }}
+    skip-preflight: true
 ```
 
 ## Outputs
