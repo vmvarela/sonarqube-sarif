@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      SONAR_SCANNER_VERSION: "8.0.1.6346"
     permissions:
       security-events: write
       contents: read
@@ -103,12 +104,23 @@ jobs:
           echo "::add-mask::${TOKEN}"
           echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
 
+      - name: Install SonarScanner CLI
+        run: |
+          SCANNER_ZIP="sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux-x64.zip"
+          SCANNER_DIR="$RUNNER_TEMP/sonar-scanner"
+          curl -fsSL \
+            "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SCANNER_ZIP}" \
+            -o "$RUNNER_TEMP/${SCANNER_ZIP}"
+          rm -rf "$SCANNER_DIR"
+          unzip -q "$RUNNER_TEMP/${SCANNER_ZIP}" -d "$SCANNER_DIR"
+          echo "$SCANNER_DIR/sonar-scanner-${SONAR_SCANNER_VERSION}-linux-x64/bin" >> "$GITHUB_PATH"
+
       - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@v7
         timeout-minutes: 10
         env:
           SONAR_TOKEN: ${{ steps.sonar_setup.outputs.token }}
           SONAR_HOST_URL: http://localhost:9000
+        run: sonar-scanner -Dsonar.projectBaseDir=.
 
       # Convert SonarQube issues to SARIF format.
       # The action waits for analysis processing to finish before fetching issues.
