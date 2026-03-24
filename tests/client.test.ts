@@ -781,11 +781,19 @@ describe("SonarQubeClient", () => {
         code: "ETIMEDOUT",
         message: "Timeout",
       };
+      // ETIMEDOUT is retryable — mock all 4 attempts (1 initial + 3 retries)
+      axiosMocks.get.mockRejectedValueOnce(axiosError);
+      axiosMocks.get.mockRejectedValueOnce(axiosError);
+      axiosMocks.get.mockRejectedValueOnce(axiosError);
       axiosMocks.get.mockRejectedValueOnce(axiosError);
 
       const client = new SonarQubeClient(mockConfig);
+      const promise = client.fetchAllIssues();
 
-      await expect(client.fetchAllIssues()).rejects.toThrow(SonarQubeError);
+      // Advance through all retry delays: 1s + 2s + 4s = 7s
+      await vi.advanceTimersByTimeAsync(10000);
+
+      await expect(promise).rejects.toThrow(SonarQubeError);
     });
 
     it("handles generic errors", async () => {
@@ -817,6 +825,197 @@ describe("SonarQubeClient", () => {
       const client = new SonarQubeClient(mockConfig);
 
       await expect(client.fetchAllIssues()).rejects.toThrow(SonarQubeError);
+    });
+  });
+
+  describe("retry behavior", () => {
+    const successResponse = {
+      data: {
+        paging: { total: 1 },
+        issues: [
+          {
+            key: "issue-1",
+            rule: "ts:S1234",
+            severity: "MAJOR",
+            component: "project:src/a.ts",
+            project: "project",
+            line: 10,
+            status: "OPEN",
+            message: "Fix this",
+            effort: "5min",
+            debt: "5min",
+            type: "CODE_SMELL",
+            flows: [],
+            textRange: {
+              startLine: 10,
+              endLine: 10,
+              startOffset: 0,
+              endOffset: 5,
+            },
+          },
+        ],
+        components: [
+          { key: "project:src/a.ts", path: "src/a.ts", name: "a.ts" },
+        ],
+        rules: [
+          {
+            key: "ts:S1234",
+            name: "Rule",
+            status: "READY",
+            lang: "ts",
+            langName: "TypeScript",
+          },
+        ],
+      },
+    };
+
+    it("succeeds after a transient 503 on the first attempt", async () => {
+      const transientError = {
+        isAxiosError: true,
+        response: { status: 503, data: {} },
+        message: "Service Unavailable",
+      };
+      axiosMocks.get.mockRejectedValueOnce(transientError);
+      axiosMocks.get.mockResolvedValueOnce(successResponse);
+
+      const client = new SonarQubeClient(mockConfig);
+      const promise = client.fetchAllIssues();
+
+      // Advance past the first retry delay (up to 2s with jitter at max)
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = await promise;
+
+      expect(result.issues).toHaveLength(1);
+      expect(axiosMocks.get).toHaveBeenCalledTimes(2);
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("Retry 1/3"),
+      );
+    });
+
+    it("succeeds after a transient 429 rate-limit on the first attempt", async () => {
+      const rateLimitError = {
+        isAxiosError: true,
+        response: { status: 429, headers: {}, data: {} },
+        message: "Too Many Requests",
+      };
+      axiosMocks.get.mockRejectedValueOnce(rateLimitError);
+      axiosMocks.get.mockResolvedValueOnce(successResponse);
+
+      const client = new SonarQubeClient(mockConfig);
+      const promise = client.fetchAllIssues();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = await promise;
+
+      expect(result.issues).toHaveLength(1);
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("HTTP 429"),
+      );
+    });
+
+    it("respects Retry-After header on 429 response", async () => {
+      vi.spyOn(Math, "random").mockReturnValue(0.5);
+
+      const rateLimitError = {
+        isAxiosError: true,
+        response: {
+          status: 429,
+          headers: { "retry-after": "5" }, // 5 seconds
+          data: {},
+        },
+        message: "Too Many Requests",
+      };
+      axiosMocks.get.mockRejectedValueOnce(rateLimitError);
+      axiosMocks.get.mockResolvedValueOnce(successResponse);
+
+      const client = new SonarQubeClient(mockConfig);
+      const promise = client.fetchAllIssues();
+
+      // 4999ms should NOT be enough (Retry-After = 5000ms)
+      await vi.advanceTimersByTimeAsync(4999);
+      expect(axiosMocks.get).toHaveBeenCalledTimes(1); // still waiting
+
+      // 1 more ms tips it over
+      await vi.advanceTimersByTimeAsync(1);
+      const result = await promise;
+
+      expect(result.issues).toHaveLength(1);
+    });
+
+    it("does not retry permanent 401 errors", async () => {
+      const authError = {
+        isAxiosError: true,
+        response: { status: 401, data: { errors: [{ msg: "Unauthorized" }] } },
+        message: "Unauthorized",
+      };
+      axiosMocks.get.mockRejectedValueOnce(authError);
+
+      const client = new SonarQubeClient(mockConfig);
+      await expect(client.fetchAllIssues()).rejects.toThrow(SonarQubeError);
+
+      // Should have been called exactly once — no retry
+      expect(axiosMocks.get).toHaveBeenCalledTimes(1);
+      expect(core.warning).not.toHaveBeenCalledWith(
+        expect.stringContaining("Retry"),
+      );
+    });
+
+    it("does not retry permanent 404 errors", async () => {
+      const notFoundError = {
+        isAxiosError: true,
+        response: { status: 404, data: {} },
+        message: "Not Found",
+      };
+      axiosMocks.get.mockRejectedValueOnce(notFoundError);
+
+      const client = new SonarQubeClient(mockConfig);
+      await expect(client.fetchAllIssues()).rejects.toThrow(SonarQubeError);
+
+      expect(axiosMocks.get).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws after exhausting MAX_RETRIES on persistent 502", async () => {
+      const badGateway = {
+        isAxiosError: true,
+        response: { status: 502, data: {} },
+        message: "Bad Gateway",
+      };
+      // 1 initial + 3 retries = 4 total attempts
+      axiosMocks.get.mockRejectedValueOnce(badGateway);
+      axiosMocks.get.mockRejectedValueOnce(badGateway);
+      axiosMocks.get.mockRejectedValueOnce(badGateway);
+      axiosMocks.get.mockRejectedValueOnce(badGateway);
+
+      const client = new SonarQubeClient(mockConfig);
+      const promise = client.fetchAllIssues();
+
+      // Advance through all retry delays: 1s + 2s + 4s = 7s (plus jitter overhead)
+      await vi.advanceTimersByTimeAsync(10000);
+
+      await expect(promise).rejects.toThrow();
+      expect(axiosMocks.get).toHaveBeenCalledTimes(4); // 1 + 3 retries
+      expect(core.warning).toHaveBeenCalledTimes(3); // one warning per retry
+    });
+
+    it("retries on ECONNRESET network error", async () => {
+      const networkError = {
+        isAxiosError: true,
+        code: "ECONNRESET",
+        message: "socket hang up",
+      };
+      axiosMocks.get.mockRejectedValueOnce(networkError);
+      axiosMocks.get.mockResolvedValueOnce(successResponse);
+
+      const client = new SonarQubeClient(mockConfig);
+      const promise = client.fetchAllIssues();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = await promise;
+
+      expect(result.issues).toHaveLength(1);
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining("ECONNRESET"),
+      );
     });
   });
 });
