@@ -1111,18 +1111,15 @@ describe("SonarQubeClient", () => {
         ),
       );
       const issueSearchCalls = getIssueSearchCalls();
-      expect(
-        issueSearchCalls.some(
-          (requestConfig) =>
-            typeof requestConfig.params?.createdBefore === "string",
-        ),
-      ).toBe(true);
-      expect(
-        issueSearchCalls.some(
-          (requestConfig) =>
-            typeof requestConfig.params?.createdAfter === "string",
-        ),
-      ).toBe(true);
+      const datesUsed = issueSearchCalls
+        .flatMap((rc) =>
+          [rc.params?.createdBefore, rc.params?.createdAfter].filter(Boolean),
+        )
+        .filter((d) => typeof d === "string");
+      expect(datesUsed.length).toBeGreaterThan(0);
+      for (const d of datesUsed) {
+        expect(d).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+0000$/);
+      }
     });
 
     it("falls back to 10k limit at max bisection depth", async () => {

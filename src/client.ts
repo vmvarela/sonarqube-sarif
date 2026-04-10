@@ -24,6 +24,12 @@ const ISSUE_TYPES = [
   "SECURITY_HOTSPOT",
 ] as const;
 const MAX_DATE_BISECT_DEPTH = 16; // Prevents infinite recursion on same-timestamp clusters
+
+/** Format a Date (or epoch ms) to SonarQube's expected datetime string: `yyyy-MM-ddTHH:mm:ss+0000` */
+function toSonarQubeDate(value: Date | number): string {
+  const d = typeof value === "number" ? new Date(value) : value;
+  return d.toISOString().replace(/\.\d{3}Z$/, "+0000");
+}
 const API_ENDPOINTS = {
   ISSUES_SEARCH: "/api/issues/search",
   RULES_SHOW: "/api/rules/show",
@@ -560,7 +566,7 @@ export class SonarQubeClient {
     }
 
     const midMs = oldestMs + Math.floor((newestMs - oldestMs) / 2);
-    const midDate = new Date(midMs).toISOString();
+    const midDate = toSonarQubeDate(midMs);
 
     core.debug(
       `Date bisection depth=${depth}: ${bounds.oldest} → ${midDate} → ${bounds.newest}`,
