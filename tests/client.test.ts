@@ -909,14 +909,12 @@ describe("SonarQubeClient", () => {
           ],
         }),
       );
-      axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
-
       const client = new SonarQubeClient(mockConfig);
       const result = await client.fetchAllIssues();
 
       expect(result.issues).toHaveLength(15000);
       expect(result.rules).toHaveLength(3);
-      expect(axiosMocks.get).toHaveBeenCalledTimes(8);
+      expect(axiosMocks.get).toHaveBeenCalledTimes(7);
       expect(axiosMocks.get).toHaveBeenNthCalledWith(1, "/api/issues/search", {
         params: {
           componentKeys: "my-project",
@@ -979,15 +977,6 @@ describe("SonarQubeClient", () => {
           types: "CODE_SMELL",
         },
       });
-      expect(axiosMocks.get).toHaveBeenNthCalledWith(8, "/api/issues/search", {
-        params: {
-          componentKeys: "my-project",
-          ps: 1,
-          p: 1,
-          resolved: "false",
-          types: "SECURITY_HOTSPOT",
-        },
-      });
     });
 
     it("deduplicates issues across type partitions", async () => {
@@ -1027,7 +1016,6 @@ describe("SonarQubeClient", () => {
           ],
         }),
       );
-      axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
       axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
 
       const client = new SonarQubeClient(mockConfig);
@@ -1097,7 +1085,6 @@ describe("SonarQubeClient", () => {
           rules: [makeRule({ key: "ts:S-BUG", name: "Bug Rule", type: "BUG" })],
         }),
       );
-      axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
       axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
       axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
 
@@ -1177,7 +1164,6 @@ describe("SonarQubeClient", () => {
 
       axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
       axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
-      axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
 
       const client = new SonarQubeClient(mockConfig);
       const result = await client.fetchAllIssues();
@@ -1227,7 +1213,6 @@ describe("SonarQubeClient", () => {
           rules: [makeRule({ key: "ts:S-BUG", name: "Bug Rule", type: "BUG" })],
         }),
       );
-      axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
       axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
       axiosMocks.get.mockResolvedValueOnce(makeCountResponse(0));
 

@@ -17,12 +17,7 @@ import { ProcessingMetrics } from "./stats";
 const MAX_PAGE_SIZE = 500;
 const MAX_PAGES = 100; // Safety limit to prevent infinite loops
 const SONARQUBE_MAX_RESULTS = 10_000; // SonarQube Elasticsearch hard cap
-const ISSUE_TYPES = [
-  "BUG",
-  "VULNERABILITY",
-  "CODE_SMELL",
-  "SECURITY_HOTSPOT",
-] as const;
+const ISSUE_TYPES = ["BUG", "VULNERABILITY", "CODE_SMELL"] as const;
 const MAX_DATE_BISECT_DEPTH = 16; // Prevents infinite recursion on same-timestamp clusters
 
 /** Format a Date (or epoch ms) to SonarQube's expected datetime string: `yyyy-MM-ddTHH:mm:ss+0000` */
