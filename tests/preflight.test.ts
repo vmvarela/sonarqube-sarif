@@ -169,15 +169,18 @@ describe("validateConfig (pre-flight)", () => {
 
   // ── Check 3: project key ────────────────────────────────────────────────────
 
-  it("throws PROJECT_NOT_FOUND when component is missing from response", async () => {
+  it("warns but does not throw when component is missing from response", async () => {
+    const coreModule = await import("@actions/core");
+
     axiosMocks.head.mockResolvedValue({ status: 200 });
     axiosMocks.get
       .mockResolvedValueOnce({ status: 200, data: { valid: true } })
       .mockResolvedValueOnce({ status: 200, data: {} });
 
-    await expect(validateConfig(baseConfig)).rejects.toMatchObject({
-      code: "PROJECT_NOT_FOUND",
-    });
+    await expect(validateConfig(baseConfig)).resolves.toBeUndefined();
+    expect(vi.mocked(coreModule.warning)).toHaveBeenCalledWith(
+      expect.stringContaining("unexpected response"),
+    );
   });
 
   it("throws PROJECT_NOT_FOUND on HTTP 404 from /api/components/show", async () => {
@@ -191,11 +194,11 @@ describe("validateConfig (pre-flight)", () => {
     });
   });
 
-  it("includes the project key and actionable guidance in the project error message", async () => {
+  it("includes the project key and actionable guidance in 404 error message", async () => {
     axiosMocks.head.mockResolvedValue({ status: 200 });
     axiosMocks.get
       .mockResolvedValueOnce({ status: 200, data: { valid: true } })
-      .mockResolvedValueOnce({ status: 200, data: {} });
+      .mockResolvedValueOnce({ status: 404, data: {} });
 
     let caughtError: unknown;
     try {
@@ -207,6 +210,34 @@ describe("validateConfig (pre-flight)", () => {
     expect(caughtError).toBeInstanceOf(SonarQubeError);
     expect((caughtError as Error).message).toMatch(/my-project/);
     expect((caughtError as Error).message).toMatch(/Browse permission/);
+  });
+
+  it("warns but does not throw on HTTP 403 (missing Browse permission)", async () => {
+    const coreModule = await import("@actions/core");
+
+    axiosMocks.head.mockResolvedValue({ status: 200 });
+    axiosMocks.get
+      .mockResolvedValueOnce({ status: 200, data: { valid: true } })
+      .mockResolvedValueOnce({ status: 403, data: {} });
+
+    await expect(validateConfig(baseConfig)).resolves.toBeUndefined();
+    expect(vi.mocked(coreModule.warning)).toHaveBeenCalledWith(
+      expect.stringContaining("Browse permission"),
+    );
+  });
+
+  it("includes server error message in 404 when available", async () => {
+    axiosMocks.head.mockResolvedValue({ status: 200 });
+    axiosMocks.get
+      .mockResolvedValueOnce({ status: 200, data: { valid: true } })
+      .mockResolvedValueOnce({
+        status: 404,
+        data: { errors: [{ msg: "Component key 'x' not found" }] },
+      });
+
+    await expect(validateConfig(baseConfig)).rejects.toThrow(
+      /Component key 'x' not found/,
+    );
   });
 
   it("throws CONNECTION_FAILED when /api/components/show is unreachable", async () => {

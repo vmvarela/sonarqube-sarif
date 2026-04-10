@@ -24,7 +24,8 @@ interface AuthValidateResponse {
 }
 
 interface ComponentShowResponse {
-  component: { key: string };
+  component?: { key: string };
+  errors?: Array<{ msg: string }>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,9 +130,6 @@ async function checkProjectKey(
   projectKey: string,
 ): Promise<void> {
   const url = `${sonarHostUrl}/api/components/show`;
-  const NOT_FOUND_MSG =
-    `Project key '${projectKey}' not found. ` +
-    "Check the project exists and the token has Browse permission.";
 
   try {
     const response = await axios.get<ComponentShowResponse>(url, {
@@ -141,9 +139,38 @@ async function checkProjectKey(
       validateStatus: (status) => status < 500,
     });
 
-    if (response.status === 404 || !response.data?.component?.key) {
-      throw new SonarQubeError(NOT_FOUND_MSG, "PROJECT_NOT_FOUND", 404);
+    if (response.status === 403) {
+      core.warning(
+        `Token may lack Browse permission on project '${projectKey}'. ` +
+          "The action will attempt to fetch issues, but may fail. " +
+          "Grant Browse permission for reliable results.",
+      );
+      return;
     }
+
+    if (response.status === 404) {
+      const serverMsg = response.data?.errors?.[0]?.msg;
+      const detail = serverMsg ?? "not found";
+      throw new SonarQubeError(
+        `Project key '${projectKey}': ${detail}. ` +
+          "Check the project exists and the token has Browse permission.",
+        "PROJECT_NOT_FOUND",
+        404,
+      );
+    }
+
+    if (response.data?.component?.key) {
+      return;
+    }
+
+    // Unexpected response — log it for debugging and warn rather than fail,
+    // since the project may still be accessible for issue fetching.
+    core.warning(
+      `Preflight: unexpected response from /api/components/show ` +
+        `(HTTP ${response.status}). The action will continue, ` +
+        "but verify the project key and token permissions if issues arise.",
+    );
+    core.debug(`Response body: ${JSON.stringify(response.data)}`);
   } catch (error) {
     if (error instanceof SonarQubeError) throw error;
 
