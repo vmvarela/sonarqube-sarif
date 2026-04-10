@@ -16,6 +16,15 @@ import { ProcessingMetrics } from "./stats";
 
 const MAX_PAGE_SIZE = 500;
 const MAX_PAGES = 100; // Safety limit to prevent infinite loops
+const SONARQUBE_MAX_RESULTS = 10_000; // SonarQube Elasticsearch hard cap
+const ISSUE_TYPES = ["BUG", "VULNERABILITY", "CODE_SMELL"] as const;
+const MAX_DATE_BISECT_DEPTH = 16; // Prevents infinite recursion on same-timestamp clusters
+
+/** Format a Date (or epoch ms) to SonarQube's expected datetime string: `yyyy-MM-ddTHH:mm:ss+0000` */
+function toSonarQubeDate(value: Date | number): string {
+  const d = typeof value === "number" ? new Date(value) : value;
+  return d.toISOString().replace(/\.\d{3}Z$/, "+0000");
+}
 const API_ENDPOINTS = {
   ISSUES_SEARCH: "/api/issues/search",
   RULES_SHOW: "/api/rules/show",
@@ -54,6 +63,11 @@ interface IssuesSearchParams {
   p: number;
   resolved?: string;
   branch?: string;
+  types?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  s?: string;
+  asc?: string;
 }
 
 interface NormalizedResponse {
@@ -66,6 +80,12 @@ interface NormalizedResponse {
 type SonarApiErrorPayload = {
   errors?: Array<{ msg?: string }>;
 };
+
+interface CollectedIssues {
+  issues: SonarQubeSearchResponse["issues"];
+  componentMap: Map<string, SonarQubeSearchResponse["components"][0]>;
+  ruleMap: Map<string, SonarQubeSearchResponse["rules"][0]>;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Functions
@@ -228,91 +248,35 @@ export class SonarQubeClient {
     );
   }
 
-  /**
-   * Fetch all issues with pagination support
-   */
   async fetchAllIssues(): Promise<SonarQubeSearchResponse> {
-    const allIssues: SonarQubeSearchResponse["issues"] = [];
-    const componentMap = new Map<
-      string,
-      SonarQubeSearchResponse["components"][0]
-    >();
-    const ruleMap = new Map<string, SonarQubeSearchResponse["rules"][0]>();
-
-    let page = 1;
-    let total = 0;
-    let totalKnown = false;
-
     core.info(`Fetching issues for project: ${this.projectKey}`);
 
-    while (true) {
-      // Safety check: prevent infinite loops due to pagination errors
-      if (page > MAX_PAGES) {
-        core.warning(
-          `Reached maximum page limit (${MAX_PAGES}). Some issues may be missing.`,
-        );
-        break;
-      }
+    const baseParams = this.buildSearchParams(1);
+    const total = await this.countIssues(baseParams);
 
-      const params = this.buildSearchParams(page);
-
-      core.debug(`Fetching page ${page}: ${JSON.stringify(params)}`);
-
-      try {
-        const response = await this.withRetry(
-          () =>
-            this.client.get(API_ENDPOINTS.ISSUES_SEARCH, {
-              params,
-            }),
-          `fetching issues page ${page}`,
-        );
-        const normalized = normalizeIssuesResponse(response.data);
-        this._pagesFetched++;
-
-        if (page === 1) {
-          if (normalized.pagingTotal !== undefined) {
-            total = normalized.pagingTotal;
-            totalKnown = true;
-            core.info(`Total issues to fetch: ${total}`);
-          } else {
-            core.warning(
-              "SonarQube response is missing paging.total. " +
-                "Falling back to last-page heuristic (fetching until a page has fewer than " +
-                `${MAX_PAGE_SIZE} results).`,
-            );
-          }
-        }
-
-        allIssues.push(...normalized.issues);
-        this.mergeIntoMap(componentMap, normalized.components, "key");
-        this.mergeIntoMap(ruleMap, normalized.rules, "key");
-
-        if (totalKnown) {
-          core.info(`Progress: ${allIssues.length}/${total} issues`);
-          if (allIssues.length >= total) break;
-        } else {
-          core.info(
-            `Progress: ${allIssues.length} issues fetched (total unknown)`,
-          );
-          if (normalized.issues.length < MAX_PAGE_SIZE) break;
-        }
-
-        page++;
-      } catch (error) {
-        throw error instanceof SonarQubeError
-          ? error
-          : this.handleError(error, "fetching issues");
-      }
+    let collected: CollectedIssues;
+    if (total <= SONARQUBE_MAX_RESULTS) {
+      collected = await this.fetchIssuesWindow(baseParams, total);
+    } else {
+      core.info(
+        `Total issues (${total}) exceeds API limit (${SONARQUBE_MAX_RESULTS}). Partitioning queries...`,
+      );
+      collected = await this.fetchPartitioned(baseParams);
     }
 
-    // Fetch missing rule details if needed
-    const missingRuleKeys = this.findMissingRuleKeys(allIssues, ruleMap);
+    const { issues, componentMap, ruleMap } = this.deduplicateCollected(
+      collected.issues,
+      collected.componentMap,
+      collected.ruleMap,
+    );
+
+    const missingRuleKeys = this.findMissingRuleKeys(issues, ruleMap);
     if (missingRuleKeys.length > 0) {
       core.info(`Fetching details for ${missingRuleKeys.length} rules...`);
       await this.fetchRuleDetails(missingRuleKeys, ruleMap);
     }
 
-    return this.buildResponse(allIssues, componentMap, ruleMap);
+    return this.buildResponse(issues, componentMap, ruleMap);
   }
 
   /**
@@ -405,6 +369,266 @@ export class SonarQubeClient {
   // ───────────────────────────────────────────────────────────────────────────
   // Private Methods
   // ───────────────────────────────────────────────────────────────────────────
+
+  private async countIssues(baseParams: IssuesSearchParams): Promise<number> {
+    const params: IssuesSearchParams = { ...baseParams, ps: 1, p: 1 };
+    try {
+      const response = await this.withRetry(
+        () => this.client.get(API_ENDPOINTS.ISSUES_SEARCH, { params }),
+        "counting issues",
+      );
+      const normalized = normalizeIssuesResponse(response.data);
+      return normalized.pagingTotal ?? 0;
+    } catch (error) {
+      throw error instanceof SonarQubeError
+        ? error
+        : this.handleError(error, "counting issues");
+    }
+  }
+
+  private async fetchIssuesWindow(
+    baseParams: IssuesSearchParams,
+    expectedTotal?: number,
+  ): Promise<CollectedIssues> {
+    const allIssues: SonarQubeSearchResponse["issues"] = [];
+    const componentMap = new Map<
+      string,
+      SonarQubeSearchResponse["components"][0]
+    >();
+    const ruleMap = new Map<string, SonarQubeSearchResponse["rules"][0]>();
+
+    let page = 1;
+    let total = expectedTotal ?? 0;
+    let totalKnown = expectedTotal !== undefined;
+
+    while (true) {
+      if (page > MAX_PAGES) {
+        core.warning(
+          `Reached maximum page limit (${MAX_PAGES}). Some issues may be missing.`,
+        );
+        break;
+      }
+
+      const params: IssuesSearchParams = { ...baseParams, p: page };
+
+      core.debug(`Fetching page ${page}: ${JSON.stringify(params)}`);
+
+      try {
+        const response = await this.withRetry(
+          () => this.client.get(API_ENDPOINTS.ISSUES_SEARCH, { params }),
+          `fetching issues page ${page}`,
+        );
+        const normalized = normalizeIssuesResponse(response.data);
+        this._pagesFetched++;
+
+        if (page === 1 && !totalKnown) {
+          if (normalized.pagingTotal !== undefined) {
+            total = normalized.pagingTotal;
+            totalKnown = true;
+            core.info(`Total issues to fetch: ${total}`);
+          } else {
+            core.warning(
+              "SonarQube response is missing paging.total. " +
+                "Falling back to last-page heuristic (fetching until a page has fewer than " +
+                `${MAX_PAGE_SIZE} results).`,
+            );
+          }
+        }
+
+        allIssues.push(...normalized.issues);
+        this.mergeIntoMap(componentMap, normalized.components, "key");
+        this.mergeIntoMap(ruleMap, normalized.rules, "key");
+
+        if (totalKnown) {
+          core.info(`Progress: ${allIssues.length}/${total} issues`);
+          if (allIssues.length >= total) break;
+        } else {
+          core.info(
+            `Progress: ${allIssues.length} issues fetched (total unknown)`,
+          );
+          if (normalized.issues.length < MAX_PAGE_SIZE) break;
+        }
+
+        page++;
+      } catch (error) {
+        throw error instanceof SonarQubeError
+          ? error
+          : this.handleError(error, "fetching issues");
+      }
+    }
+
+    return { issues: allIssues, componentMap, ruleMap };
+  }
+
+  private async discoverDateBounds(
+    baseParams: IssuesSearchParams,
+  ): Promise<{ oldest: string; newest: string } | undefined> {
+    const fetchBoundary = async (asc: boolean): Promise<string | undefined> => {
+      const params: IssuesSearchParams = {
+        ...baseParams,
+        ps: 1,
+        p: 1,
+        s: "CREATION_DATE",
+        asc: asc ? "true" : "false",
+      };
+      try {
+        const response = await this.withRetry(
+          () => this.client.get(API_ENDPOINTS.ISSUES_SEARCH, { params }),
+          `fetching ${asc ? "oldest" : "newest"} issue date`,
+        );
+        const normalized = normalizeIssuesResponse(response.data);
+        return normalized.issues[0]?.creationDate;
+      } catch {
+        return undefined;
+      }
+    };
+
+    const [oldest, newest] = await Promise.all([
+      fetchBoundary(true),
+      fetchBoundary(false),
+    ]);
+
+    if (!oldest || !newest) return undefined;
+    return { oldest, newest };
+  }
+
+  private async fetchPartitioned(
+    baseParams: IssuesSearchParams,
+  ): Promise<CollectedIssues> {
+    const allIssues: SonarQubeSearchResponse["issues"] = [];
+    const componentMap = new Map<
+      string,
+      SonarQubeSearchResponse["components"][0]
+    >();
+    const ruleMap = new Map<string, SonarQubeSearchResponse["rules"][0]>();
+
+    const collect = (result: CollectedIssues): void => {
+      allIssues.push(...result.issues);
+      for (const [k, v] of result.componentMap) componentMap.set(k, v);
+      for (const [k, v] of result.ruleMap) ruleMap.set(k, v);
+    };
+
+    for (const issueType of ISSUE_TYPES) {
+      const typeParams: IssuesSearchParams = {
+        ...baseParams,
+        types: issueType,
+      };
+      const typeTotal = await this.countIssues(typeParams);
+
+      if (typeTotal === 0) continue;
+
+      core.info(`  Type ${issueType}: ${typeTotal} issues`);
+
+      if (typeTotal <= SONARQUBE_MAX_RESULTS) {
+        collect(await this.fetchIssuesWindow(typeParams, typeTotal));
+      } else {
+        core.info(
+          `  Type ${issueType} exceeds limit, splitting by date range...`,
+        );
+        collect(await this.fetchByDateBisection(typeParams, 0));
+      }
+    }
+
+    return { issues: allIssues, componentMap, ruleMap };
+  }
+
+  private async fetchByDateBisection(
+    baseParams: IssuesSearchParams,
+    depth: number,
+  ): Promise<CollectedIssues> {
+    if (depth >= MAX_DATE_BISECT_DEPTH) {
+      core.warning(
+        `Date bisection reached maximum depth (${MAX_DATE_BISECT_DEPTH}). ` +
+          `Fetching first ${SONARQUBE_MAX_RESULTS} issues from this window.`,
+      );
+      return this.fetchIssuesWindow(baseParams, SONARQUBE_MAX_RESULTS);
+    }
+
+    const bounds = await this.discoverDateBounds(baseParams);
+    if (!bounds) {
+      return this.fetchIssuesWindow(baseParams);
+    }
+
+    const oldestMs = new Date(bounds.oldest).getTime();
+    const newestMs = new Date(bounds.newest).getTime();
+
+    if (oldestMs >= newestMs) {
+      core.warning(
+        `All issues in window share the same timestamp. ` +
+          `Fetching first ${SONARQUBE_MAX_RESULTS} issues.`,
+      );
+      return this.fetchIssuesWindow(baseParams, SONARQUBE_MAX_RESULTS);
+    }
+
+    const midMs = oldestMs + Math.floor((newestMs - oldestMs) / 2);
+    const midDate = toSonarQubeDate(midMs);
+
+    core.debug(
+      `Date bisection depth=${depth}: ${bounds.oldest} → ${midDate} → ${bounds.newest}`,
+    );
+
+    const allIssues: SonarQubeSearchResponse["issues"] = [];
+    const componentMap = new Map<
+      string,
+      SonarQubeSearchResponse["components"][0]
+    >();
+    const ruleMap = new Map<string, SonarQubeSearchResponse["rules"][0]>();
+
+    const collect = (result: CollectedIssues): void => {
+      allIssues.push(...result.issues);
+      for (const [k, v] of result.componentMap) componentMap.set(k, v);
+      for (const [k, v] of result.ruleMap) ruleMap.set(k, v);
+    };
+
+    const leftParams: IssuesSearchParams = {
+      ...baseParams,
+      createdAfter: baseParams.createdAfter,
+      createdBefore: midDate,
+    };
+    const rightParams: IssuesSearchParams = {
+      ...baseParams,
+      createdAfter: midDate,
+      createdBefore: baseParams.createdBefore,
+    };
+
+    for (const [label, windowParams] of [
+      ["left", leftParams],
+      ["right", rightParams],
+    ] as const) {
+      const windowTotal = await this.countIssues(windowParams);
+      if (windowTotal === 0) continue;
+
+      core.debug(`  ${label} window: ${windowTotal} issues`);
+
+      if (windowTotal <= SONARQUBE_MAX_RESULTS) {
+        collect(await this.fetchIssuesWindow(windowParams, windowTotal));
+      } else {
+        collect(await this.fetchByDateBisection(windowParams, depth + 1));
+      }
+    }
+
+    return { issues: allIssues, componentMap, ruleMap };
+  }
+
+  private deduplicateCollected(
+    issues: SonarQubeSearchResponse["issues"],
+    componentMap: Map<string, SonarQubeSearchResponse["components"][0]>,
+    ruleMap: Map<string, SonarQubeSearchResponse["rules"][0]>,
+  ): CollectedIssues {
+    const seen = new Map<string, SonarQubeSearchResponse["issues"][0]>();
+    for (const issue of issues) {
+      if (!seen.has(issue.key)) {
+        seen.set(issue.key, issue);
+      }
+    }
+    const uniqueIssues = Array.from(seen.values());
+    if (uniqueIssues.length < issues.length) {
+      core.info(
+        `Deduplicated ${issues.length - uniqueIssues.length} duplicate issues across partitions.`,
+      );
+    }
+    return { issues: uniqueIssues, componentMap, ruleMap };
+  }
 
   private buildSearchParams(page: number): IssuesSearchParams {
     const params: IssuesSearchParams = {
