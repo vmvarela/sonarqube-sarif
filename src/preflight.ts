@@ -7,7 +7,7 @@
  * Checks (in order, fail-fast):
  *   1. SonarQube URL is reachable (HTTP connectivity)
  *   2. Token is valid  (GET /api/authentication/validate)
- *   3. Project key exists (GET /api/projects/search?projects=<key>)
+ *   3. Project key exists (GET /api/components/show?component=<key>)
  */
 
 import axios from "axios";
@@ -23,8 +23,8 @@ interface AuthValidateResponse {
   valid: boolean;
 }
 
-interface ProjectsSearchResponse {
-  components: Array<{ key: string }>;
+interface ComponentShowResponse {
+  component: { key: string };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,45 +118,38 @@ async function checkToken(
 /**
  * Check 3: Does the project key exist?
  *
- * `GET /api/projects/search?projects=<key>` returns a paginated list.
- * An empty `components` array means the project was not found (or the token
- * lacks Browse permission on it).
+ * `GET /api/components/show?component=<key>` returns the component details.
+ * A 404 means the project was not found; a 403 means the token lacks Browse
+ * permission. Unlike `/api/projects/search` (which requires Administer System),
+ * this endpoint only needs Browse permission on the project.
  */
 async function checkProjectKey(
   sonarHostUrl: string,
   sonarToken: string,
   projectKey: string,
 ): Promise<void> {
-  const url = `${sonarHostUrl}/api/projects/search`;
+  const url = `${sonarHostUrl}/api/components/show`;
   const NOT_FOUND_MSG =
     `Project key '${projectKey}' not found. ` +
     "Check the project exists and the token has Browse permission.";
 
   try {
-    const response = await axios.get<ProjectsSearchResponse>(url, {
-      params: { projects: projectKey, ps: 1 },
+    const response = await axios.get<ComponentShowResponse>(url, {
+      params: { component: projectKey },
       auth: { username: sonarToken, password: "" },
       timeout: 10_000,
       validateStatus: (status) => status < 500,
     });
 
-    if (response.status === 404) {
+    if (response.status === 404 || !response.data?.component?.key) {
       throw new SonarQubeError(NOT_FOUND_MSG, "PROJECT_NOT_FOUND", 404);
-    }
-
-    if (!response.data?.components?.length) {
-      throw new SonarQubeError(
-        NOT_FOUND_MSG,
-        "PROJECT_NOT_FOUND",
-        response.status,
-      );
     }
   } catch (error) {
     if (error instanceof SonarQubeError) throw error;
 
     const cause = error instanceof Error ? error : undefined;
     throw createConnectionError(
-      `Failed to reach /api/projects/search: ${cause?.message ?? String(error)}`,
+      `Failed to reach /api/components/show: ${cause?.message ?? String(error)}`,
       cause,
     );
   }

@@ -6,10 +6,9 @@
  *  - URL not reachable (network error) → actionable SonarQubeError
  *  - Token invalid: valid=false → SonarQubeError AUTH_FAILED
  *  - Token invalid: HTTP 401 → SonarQubeError AUTH_FAILED
- *  - Project not found: empty components → SonarQubeError PROJECT_NOT_FOUND
+ *  - Project not found: missing component → SonarQubeError PROJECT_NOT_FOUND
  *  - Project not found: HTTP 404 → SonarQubeError PROJECT_NOT_FOUND
- *  - /api/authentication/validate network error → SonarQubeError CONNECTION_FAILED
- *  - /api/projects/search network error → SonarQubeError CONNECTION_FAILED
+ *  - /api/components/show network error → SonarQubeError CONNECTION_FAILED
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -85,8 +84,8 @@ describe("validateConfig (pre-flight)", () => {
       .mockResolvedValueOnce({ status: 200, data: { valid: true } }) // auth/validate
       .mockResolvedValueOnce({
         status: 200,
-        data: { components: [{ key: "my-project" }] },
-      }); // projects/search
+        data: { component: { key: "my-project" } },
+      }); // components/show
 
     await expect(validateConfig(baseConfig)).resolves.toBeUndefined();
   });
@@ -118,7 +117,7 @@ describe("validateConfig (pre-flight)", () => {
       .mockResolvedValueOnce({ status: 200, data: { valid: true } })
       .mockResolvedValueOnce({
         status: 200,
-        data: { components: [{ key: "my-project" }] },
+        data: { component: { key: "my-project" } },
       });
 
     await expect(validateConfig(baseConfig)).resolves.toBeUndefined();
@@ -170,18 +169,18 @@ describe("validateConfig (pre-flight)", () => {
 
   // ── Check 3: project key ────────────────────────────────────────────────────
 
-  it("throws PROJECT_NOT_FOUND when components array is empty", async () => {
+  it("throws PROJECT_NOT_FOUND when component is missing from response", async () => {
     axiosMocks.head.mockResolvedValue({ status: 200 });
     axiosMocks.get
       .mockResolvedValueOnce({ status: 200, data: { valid: true } })
-      .mockResolvedValueOnce({ status: 200, data: { components: [] } });
+      .mockResolvedValueOnce({ status: 200, data: {} });
 
     await expect(validateConfig(baseConfig)).rejects.toMatchObject({
       code: "PROJECT_NOT_FOUND",
     });
   });
 
-  it("throws PROJECT_NOT_FOUND on HTTP 404 from /api/projects/search", async () => {
+  it("throws PROJECT_NOT_FOUND on HTTP 404 from /api/components/show", async () => {
     axiosMocks.head.mockResolvedValue({ status: 200 });
     axiosMocks.get
       .mockResolvedValueOnce({ status: 200, data: { valid: true } })
@@ -196,7 +195,7 @@ describe("validateConfig (pre-flight)", () => {
     axiosMocks.head.mockResolvedValue({ status: 200 });
     axiosMocks.get
       .mockResolvedValueOnce({ status: 200, data: { valid: true } })
-      .mockResolvedValueOnce({ status: 200, data: { components: [] } });
+      .mockResolvedValueOnce({ status: 200, data: {} });
 
     let caughtError: unknown;
     try {
@@ -210,7 +209,7 @@ describe("validateConfig (pre-flight)", () => {
     expect((caughtError as Error).message).toMatch(/Browse permission/);
   });
 
-  it("throws CONNECTION_FAILED when /api/projects/search is unreachable", async () => {
+  it("throws CONNECTION_FAILED when /api/components/show is unreachable", async () => {
     axiosMocks.head.mockResolvedValue({ status: 200 });
     axiosMocks.get
       .mockResolvedValueOnce({ status: 200, data: { valid: true } })
